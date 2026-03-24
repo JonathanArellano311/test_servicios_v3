@@ -1,0 +1,21 @@
+<svg width="640" height="180" viewBox="0 0 640 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18B5FF"/>
+      <stop offset="100%" stop-color="#0A5AE8"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="180" rx="24" fill="white"/>
+  <g transform="translate(18,18)">
+    <path d="M89 10C60 10 31 25 14 48" stroke="url(#g1)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M89 33C67 33 45 43 32 59" stroke="url(#g1)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M89 56C74 56 61 62 52 72" stroke="url(#g1)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M97 8L63 73H91L74 129L126 58H96L116 8H97Z" fill="#FFB000" stroke="#0E1F4D" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="87" cy="95" r="8" fill="#0A5AE8"/>
+  </g>
+  <g transform="translate(160,38)">
+    <text x="0" y="46" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="800" fill="#18B5FF" letter-spacing="2">FIBER</text>
+    <text x="194" y="46" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="800" fill="#0A5AE8" letter-spacing="2">TECH</text>
+    <text x="4" y="94" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#FFB000" letter-spacing="7">TU CONEXIÓN AL FUTURO</text>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+{
+  "name": "test-servicios",
+  "version": "1.0.0",
+  "description": "Test_Servicios web IPv4/IPv6 and network diagnostics",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

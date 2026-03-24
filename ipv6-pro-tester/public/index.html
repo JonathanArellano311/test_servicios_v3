@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test_Servicios</title>
+  <meta name="description" content="Prueba profesional de IPv4, IPv6, latencia, jitter, pérdida estimada y validación de dominio." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <div class="brand-block">
+        <div class="eyebrow">Herramienta de diagnóstico de red</div>
+        <h1>Test_Servicios</h1>
+        <p>Verifica conectividad IPv4 / IPv6, latencia, jitter, pérdida estimada, paquetes grandes y resolución DNS de dominios.</p>
+      </div>
+      <button class="button button-primary" id="run-main-test">Ejecutar prueba general</button>
+    </div>
+  </header>
+
+  <main class="container main-grid">
+    <section class="card hero-card">
+      <div class="score-group">
+        <div class="score-panel">
+          <div class="score-label">IPv6</div>
+          <div class="score-value" id="ipv6-score">0.0/10</div>
+          <div class="score-status" id="ipv6-status">Pendiente</div>
+        </div>
+        <div class="score-panel">
+          <div class="score-label">IPv4</div>
+          <div class="score-value" id="ipv4-score">0.0/10</div>
+          <div class="score-status" id="ipv4-status">Pendiente</div>
+        </div>
+        <div class="score-panel score-panel-highlight">
+          <div class="score-label">Resultado general</div>
+          <div class="score-value" id="readiness-score">0.0/10</div>
+          <div class="score-status" id="general-status">Listo para iniciar</div>
+        </div>
+      </div>
+      <div class="hero-summary" id="hero-summary">
+        Ejecuta la prueba para ver el estado de tu conexión y si el sitio está listo para trabajar con IPv6.
+      </div>
+    </section>
+
+    <section class="card span-2">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Conectividad</div>
+          <h2>Resultado técnico</h2>
+        </div>
+      </div>
+      <div class="stats-grid" id="network-stats"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Checklist</div>
+          <h2>Pruebas</h2>
+        </div>
+      </div>
+      <div class="test-list" id="test-list"></div>
+    </section>
+
+    <section class="card span-2">
+      <div class="section-head section-head-wrap">
+        <div>
+          <div class="eyebrow">Pérdida estimada</div>
+          <h2>Test de paquetes</h2>
+        </div>
+        <div class="inline-controls">
+          <label>
+            <span>Solicitudes</span>
+            <input type="number" id="packet-count" min="1" step="1" value="20" />
+          </label>
+          <label>
+            <span>Intervalo (ms)</span>
+            <input type="number" id="packet-interval" min="50" step="50" value="250" />
+          </label>
+        </div>
+      </div>
+      <p class="section-copy">Esta prueba usa solicitudes HTTP repetidas al servidor para estimar pérdida, latencia y jitter. También puedes dejarla corriendo en modo continuo y detenerla cuando quieras.</p>
+      <div class="button-row">
+        <button class="button button-primary" id="start-packet-test">Iniciar prueba</button>
+        <button class="button button-secondary" id="start-continuous-test">Modo continuo</button>
+        <button class="button button-secondary" id="stop-packet-test" disabled>Detener</button>
+      </div>
+      <div class="packet-progress-container" id="packet-stats">
+        <div class="progress-ring-group">
+          <svg class="progress-ring-svg" viewBox="0 0 120 120">
+            <circle class="progress-ring-bg" cx="60" cy="60" r="50"></circle>
+            <circle class="progress-ring" id="ring-sent" cx="60" cy="60" r="50" style="--progress: 0%"></circle>
+          </svg>
+          <div class="ring-label">Enviados</div>
+          <div class="ring-value" id="val-sent">0</div>
+          <div class="ring-total" id="total-sent">/ 0</div>
+          <div class="ring-percentage" id="pct-sent">0%</div>
+        </div>
+
+        <div class="progress-ring-group">
+          <svg class="progress-ring-svg" viewBox="0 0 120 120">
+            <circle class="progress-ring-bg" cx="60" cy="60" r="50"></circle>
+            <circle class="progress-ring" id="ring-time" cx="60" cy="60" r="50" style="--progress: 0%; display: none;"></circle>
+          </svg>
+          <div class="ring-label">Tiempo</div>
+          <div class="ring-value" id="val-time">0:00</div>
+          <div class="ring-total" id="total-time">/ 0:00</div>
+        </div>
+
+        <div class="progress-ring-group">
+          <svg class="progress-ring-svg" viewBox="0 0 120 120">
+            <circle class="progress-ring-bg" cx="60" cy="60" r="50"></circle>
+            <circle class="progress-ring" id="ring-received" cx="60" cy="60" r="50" style="--progress: 0%"></circle>
+            <circle class="loss-indicator" id="ring-loss" cx="60" cy="60" r="50" style="--loss: 0%"></circle>
+          </svg>
+          <div class="ring-label">Recibidos</div>
+          <div class="ring-value" id="val-received">0</div>
+          <div class="ring-total" id="total-received">/ 0</div>
+          <div class="ring-percentage" id="pct-received">0%</div>
+        </div>
+      </div>
+      <div class="packet-log" id="packet-log">Aún no se ha ejecutado ninguna prueba de paquetes.</div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Velocidad</div>
+          <h2>Speed test</h2>
+        </div>
+      </div>
+      <p class="section-copy">Puedes abrir pruebas externas o usar una medición rápida local del servidor actual.</p>
+      <div class="button-row button-row-stack">
+        <button class="button button-primary" id="run-local-speed">Prueba rápida local</button>
+        <a class="button button-secondary" href="https://www.speedtest.net" target="_blank" rel="noreferrer">Abrir Speedtest</a>
+        <a class="button button-secondary" href="https://fast.com" target="_blank" rel="noreferrer">Abrir Fast</a>
+      </div>
+      <div class="speed-box">
+        <div><span>Descarga estimada</span><strong id="speed-download">0.00 Mbps</strong></div>
+        <div><span>Latencia</span><strong id="speed-latency">0 ms</strong></div>
+        <div><span>Tamaño de prueba</span><strong id="speed-size">0 MB</strong></div>
+      </div>
+    </section>
+
+    <section class="card span-2">
+      <div class="section-head section-head-wrap">
+        <div>
+          <div class="eyebrow">DNS</div>
+          <h2>Verificador de dominio</h2>
+        </div>
+        <div class="inline-controls domain-controls">
+          <label class="domain-field">
+            <span>Dominio</span>
+            <input type="text" id="domain-input" placeholder="ejemplo.com" />
+          </label>
+          <button class="button button-primary" id="check-domain">Revisar dominio</button>
+        </div>
+      </div>
+      <div class="domain-result" id="domain-result">Ingresa un dominio para comprobar si tiene registros A y AAAA.</div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-content">
+      <p>© 2026 Test_Servicios. Todos los derechos reservados.</p>
+      <p>Elaborado por Networx Solutions C.A. para uso autorizado.</p>
+      <p>Propietario y titular de la plataforma: Ing. Jonathan Arellano.</p>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
