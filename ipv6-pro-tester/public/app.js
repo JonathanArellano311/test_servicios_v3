@@ -485,10 +485,97 @@ async function checkDomain() {
   }
 }
 
+// Toggle de tema oscuro/claro
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.classList.contains('light-mode');
+  if (isDark) {
+    html.classList.remove('light-mode');
+    localStorage.setItem('theme', 'dark');
+    $('theme-icon').textContent = '🌙';
+  } else {
+    html.classList.add('light-mode');
+    localStorage.setItem('theme', 'light');
+    $('theme-icon').textContent = '☀️';
+  }
+}
+
+// Cargar tema guardado
+function loadTheme() {
+  const theme = localStorage.getItem('theme') || 'dark';
+  const html = document.documentElement;
+  if (theme === 'light') {
+    html.classList.add('light-mode');
+    $('theme-icon').textContent = '☀️';
+  } else {
+    html.classList.remove('light-mode');
+    $('theme-icon').textContent = '🌙';
+  }
+}
+
+// Obtener geolocalización
+async function loadGeolocation() {
+  try {
+    const response = await fetch('https://ipapi.co/json/');
+    const data = await response.json();
+    $('geo-country').textContent = data.country_name || '-';
+    $('geo-city').textContent = data.city || '-';
+    $('geo-isp').textContent = data.org || '-';
+    $('geo-coords').textContent = `${data.latitude}, ${data.longitude}` || '-';
+  } catch (error) {
+    console.log('No se pudo cargar geolocalización:', error);
+    $('geo-country').textContent = 'Error al cargar';
+    $('geo-city').textContent = 'Error al cargar';
+    $('geo-isp').textContent = 'Error al cargar';
+    $('geo-coords').textContent = 'Error al cargar';
+  }
+}
+
+// Exportar reporte
+function exportReport() {
+  const reportData = {
+    timestamp: new Date().toISOString(),
+    ipInfo: state.ipInfo,
+    scores: state.scores,
+    tests: state.tests,
+  };
+
+  const csv = [
+    ['Test_Servicios - Reporte', ''],
+    ['Fecha', new Date(reportData.timestamp).toLocaleString()],
+    [''],
+    ['=== RESULTADOS ===', ''],
+    ['IP Detectada', reportData.ipInfo?.ip || '-'],
+    ['Protocolo', reportData.ipInfo?.family || '-'],
+    [''],
+    ['=== PUNTUACIONES ===', ''],
+    ['IPv4', reportData.scores.ipv4 + '/10'],
+    ['IPv6', reportData.scores.ipv6 + '/10'],
+    ['Readiness General', reportData.scores.readiness + '/10'],
+    [''],
+    ['=== PRUEBAS ===', '']
+  ];
+
+  reportData.tests.forEach(test => {
+    csv.push([test.title, test.status, test.details]);
+  });
+
+  const csvContent = csv.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `test-servicios-reporte-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function wireEvents() {
   $('run-main-test').addEventListener('click', runGeneralTest);
   $('run-local-speed').addEventListener('click', runSpeedTest);
   $('check-domain').addEventListener('click', checkDomain);
+  $('toggle-theme').addEventListener('click', toggleTheme);
+  $('export-report').addEventListener('click', exportReport);
   $('stop-packet-test').addEventListener('click', () => { state.packetRun.stopRequested = true; });
 
   // Botones de guardar resultados (si existen)
@@ -515,6 +602,7 @@ function wireEvents() {
 }
 
 async function init() {
+  loadTheme();
   renderTests();
   renderStats([
     { label: 'IP detectada', value: 'Pendiente' },
@@ -526,6 +614,7 @@ async function init() {
   ]);
   renderPacketStats(0, 0, 20, 0);
   wireEvents();
+  loadGeolocation();
   await runGeneralTest();
   await loadSavedResults();
 }

@@ -18,7 +18,10 @@
         <h1>Test_Servicios</h1>
         <p>Verifica conectividad IPv4 / IPv6, latencia, jitter, pérdida estimada, paquetes grandes y resolución DNS de dominios.</p>
       </div>
-      <button class="button button-primary" id="run-main-test">Ejecutar prueba general</button>
+      <div class="header-controls">
+        <button class="button button-secondary" id="toggle-theme" title="Cambiar tema"><span id="theme-icon">🌙</span></button>
+        <button class="button button-primary" id="run-main-test">Ejecutar prueba general</button>
+      </div>
     </div>
   </header>
 
@@ -46,14 +49,44 @@
       </div>
     </section>
 
-    <section class="card span-2">
+    <section class="card span-full">
       <div class="section-head">
         <div>
           <div class="eyebrow">Conectividad</div>
           <h2>Resultado técnico</h2>
         </div>
+        <div class="inline-controls">
+          <button class="button button-secondary" id="export-report">📊 Exportar</button>
+        </div>
       </div>
       <div class="stats-grid" id="network-stats"></div>
+    </section>
+
+    <section class="card span-full">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Ubicación</div>
+          <h2>Geolocalización</h2>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <span>País</span>
+          <strong id="geo-country">-</strong>
+        </div>
+        <div class="stat-box">
+          <span>Ciudad</span>
+          <strong id="geo-city">-</strong>
+        </div>
+        <div class="stat-box">
+          <span>ISP</span>
+          <strong id="geo-isp">-</strong>
+        </div>
+        <div class="stat-box">
+          <span>Coordenadas</span>
+          <strong id="geo-coords">-</strong>
+        </div>
+      </div>
     </section>
 
     <section class="card">
