@@ -1,32 +1,60 @@
 # Historial de Cambios - Test_Servicios IPv6 Pro Tester
 
-## Versión 1.1.0 - 24 de marzo de 2026
+## Versión 1.2.0 - 24 de marzo de 2026 (Segundo Update)
 
-### 🐛 Correcciones
-- **FIX: Función `checkDomain()` en `public/app.js`**
-  - El código de esta función estaba suelto, fuera de la función definida
-  - Esto causaba que el botón de verificación de dominio no funcionara
-  - **Cambio:** Se envolvió correctamente el código dentro de `async function checkDomain()`
-  - Archivo: `ipv6-pro-tester/public/app.js` (líneas 431-457)
+### ✨ Nuevas Funcionalidades
+- **Tema Oscuro/Claro** 🌙/☀️
+  - Toggle en el header para cambiar entre modo oscuro y claro
+  - Preferencia guardada en localStorage
+  - Archivo: `public/styles.css` - Variables CSS dinámicas
+  - Archivo: `public/app.js` - Funciones `toggleTheme()` y `loadTheme()`
 
-### ✅ Funcionalidades Reparadas
-- ✓ Test de paquetes - Ahora realiza ping repetitivos al servidor
-- ✓ Prueba general - Ejecuta todas las pruebas de conectividad
-- ✓ Speed test local - Descarga archivo de 5MB para medir velocidad
-- ✓ Verificador de DNS - Revisa registros A y AAAA de dominios
+- **Geolocalización** 📍
+  - Muestra país, ciudad, ISP y coordenadas
+  - Integración con API ipapi.co (gratis sin autenticación)
+  - Carga automática al iniciar la aplicación
+  - Archivo: `public/app.js` - Función `loadGeolocation()`
 
-### 📦 Archivos Modificados
-- `ipv6-pro-tester/public/app.js` - Corrección de función checkDomain
+- **Exportar Reporte** 📊
+  - Descarga datos de pruebas en formato CSV
+  - Incluye IP, protocolo, puntuaciones y resultados de pruebas
+  - Botón en sección "Resultado técnico"
+  - Archivo: `public/app.js` - Función `exportReport()`
+
+- **Diseño Mejorado**
+  - Estadísticas ahora ocupan ancho completo (span-full)
+  - IPv6 tiene más espacio disponible
+  - Nueva sección de geolocalización a ancho completo
+  - Grid responsivo optimizado
+
+### 🐛 Correcciones Previas (v1.1.0)
+- Función `checkDomain()` corregida en `public/app.js`
+
+### 📦 Archivos Modificados v1.2.0
+- `public/index.html` - Agregadas secciones geolocalización y controles de tema
+- `public/styles.css` - Variables dinámicas para temas + clase span-full
+- `public/app.js` - Nuevas funciones: toggleTheme, loadTheme, loadGeolocation, exportReport
 
 ### 🚀 Estado Actual
 - Servidor ejecutándose en puerto 3000
-- Todos los endpoints activos y funcionales
-- Base de datos local (/data/results.json) para almacenar historiales
+- Todos los endpoints activos
+- Funcionalidades de UI/UX mejoradas
+- Tema dinámico con persistencia
+- Geolocalización en vivo
+- Exportación de reportes
 
 ### 📥 Sincronización
-- Cambios replicados en:
-  - `c:\Users\ADMIN\Downloads\test_servicios_v3\ipv6-pro-tester\`
-  - `c:\Users\ADMIN\Downloads\fibertech-ipv6-tester\ipv6-pro-tester\`
+- ✅ Cambios replicados en ambas carpetas
+- ✅ Commits registrados en GitHub
+- ✅ Base de datos local (/data/results.json) funcional
+
+### 🎨 Mejoras de UX
+- Header más compacto con controles
+- Layout span-full para secciones principales
+- Geolocalización automática
+- Exportación de datos en un click
 
 ---
-**Nota:** Los cambios están listos para producción. El servidor requiere Node.js 18+ y Express 4.21+
+**Versión:** 1.2.0  
+**Fecha:** 24-03-2026  
+**Estado:** Producción
