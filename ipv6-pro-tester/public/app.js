@@ -115,8 +115,9 @@ function renderStats(items) {
   `).join('');
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, { cache: 'no-store' });
+async function fetchJson(url, options = {}) {
+  const opts = { cache: 'no-store', ...options };
+  const response = await fetch(url, opts);
   if (!response.ok) throw new Error(`Error ${response.status}`);
   return response.json();
 }
@@ -350,7 +351,84 @@ async function runGeneralTest() {
   }
 }
 
-async function checkDomain() {
+async function saveCurrentResults() {
+  try {
+    $('save-test-btn').disabled = true;
+    const testData = {
+      ipInfo: state.ipInfo,
+      scores: state.scores,
+      tests: state.tests,
+      timestamp: new Date().toISOString(),
+    };
+    const response = await fetchJson('/api/results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testData),
+    });
+    if (response.ok) {
+      setText('save-status', '✓ Resultado guardado correctamente');
+      setTimeout(() => setText('save-status', ''), 2000);
+      await loadSavedResults();
+    }
+  } catch (error) {
+    setText('save-status', '✗ Error al guardar: ' + error.message);
+  } finally {
+    $('save-test-btn').disabled = false;
+  }
+}
+
+async function loadSavedResults() {
+  try {
+    const results = await fetchJson('/api/results');
+    const container = $('results-history');
+    if (!container) return;
+    
+    if (!Array.isArray(results) || results.length === 0) {
+      container.innerHTML = '<p style="padding: 1rem;">No hay resultados guardados aún.</p>';
+      return;
+    }
+
+    container.innerHTML = results.reverse().map((result) => `
+      <div style="padding: 1rem; border-bottom: 1px solid #333; margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong>${new Date(result.saveTime).toLocaleString()}</strong>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #888;">
+              Readiness: ${result.scores.readiness}/10 | IPv4: ${result.scores.ipv4}/10 | IPv6: ${result.scores.ipv6}/10
+            </p>
+          </div>
+          <button onclick="deleteResult(${result.id})" style="padding: 0.25rem 0.5rem; cursor: pointer;">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Error al cargar resultados:', error);
+  }
+}
+
+async function deleteResult(id) {
+  if (!confirm('¿Estás seguro de que quieres eliminar este resultado?')) return;
+  try {
+    await fetch(`/api/results/${id}`, { method: 'DELETE' });
+    await loadSavedResults();
+  } catch (error) {
+    console.error('Error al eliminar resultado:', error);
+  }
+}
+
+async function clearAllResults() {
+  if (!confirm('¿Estás seguro de que quieres eliminar TODOS los resultados guardados?')) return;
+  try {
+    await fetch('/api/results', { method: 'DELETE' });
+    await loadSavedResults();
+    setText('save-status', '✓ Todos los resultados han sido eliminados');
+    setTimeout(() => setText('save-status', ''), 2000);
+  } catch (error) {
+    console.error('Error al limpiar resultados:', error);
+  }
+}
   const domain = $('domain-input').value.trim();
   if (!domain) {
     $('domain-result').textContent = 'Escribe un dominio válido para revisar sus registros.';
@@ -391,6 +469,17 @@ function wireEvents() {
   $('check-domain').addEventListener('click', checkDomain);
   $('stop-packet-test').addEventListener('click', () => { state.packetRun.stopRequested = true; });
 
+  // Botones de guardar resultados (si existen)
+  const saveBtn = $('save-test-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveCurrentResults);
+  }
+
+  const clearBtn = $('clear-results-btn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearAllResults);
+  }
+
   $('start-packet-test').addEventListener('click', async () => {
     const count = Math.max(1, Number($('packet-count').value || 20));
     const interval = Math.max(50, Number($('packet-interval').value || 250));
@@ -416,6 +505,7 @@ async function init() {
   renderPacketStats(0, 0, 20, 0);
   wireEvents();
   await runGeneralTest();
+  await loadSavedResults();
 }
 
 init();

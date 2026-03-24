@@ -2,13 +2,62 @@ const express = require('express');
 const os = require('os');
 const path = require('path');
 const dns = require('dns').promises;
+const fs = require('fs').promises;
+const fsSync = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+const DATA_FILE = path.join(__dirname, '..', 'data', 'results.json');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Asegurar que existe el directorio de datos
+async function ensureDataDir() {
+  try {
+    if (!fsSync.existsSync(DATA_DIR)) {
+      fsSync.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (error) {
+    console.error('Error al crear directorio de datos:', error.message);
+  }
+}
+
+// Cargar resultados guardados
+async function loadResults() {
+  try {
+    if (fsSync.existsSync(DATA_FILE)) {
+      const data = await fs.readFile(DATA_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error al cargar resultados:', error.message);
+    return [];
+  }
+}
+
+// Guardar resultado
+async function saveResult(result) {
+  try {
+    await ensureDataDir();
+    const results = await loadResults();
+    result.id = Date.now();
+    result.saveTime = new Date().toISOString();
+    results.push(result);
+    // Mantener solo los últimos 100 resultados
+    if (results.length > 100) {
+      results.shift();
+    }
+    await fs.writeFile(DATA_FILE, JSON.stringify(results, null, 2));
+    return result;
+  } catch (error) {
+    console.error('Error al guardar resultado:', error.message);
+    throw error;
+  }
+}
 
 function normalizeAddress(address) {
   if (!address) return null;
@@ -112,6 +161,47 @@ app.get('/api/domain-check', async (req, res) => {
   }
 
   res.json(output);
+});
+
+app.post('/api/results', async (req, res) => {
+  try {
+    const testData = req.body;
+    const savedResult = await saveResult(testData);
+    res.json({ ok: true, result: savedResult });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al guardar resultado', details: error.message });
+  }
+});
+
+app.get('/api/results', async (req, res) => {
+  try {
+    const results = await loadResults();
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener resultados', details: error.message });
+  }
+});
+
+app.delete('/api/results/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    let results = await loadResults();
+    results = results.filter((r) => r.id !== id);
+    await fs.writeFile(DATA_FILE, JSON.stringify(results, null, 2));
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar resultado', details: error.message });
+  }
+});
+
+app.delete('/api/results', async (req, res) => {
+  try {
+    await ensureDataDir();
+    await fs.writeFile(DATA_FILE, JSON.stringify([], null, 2));
+    res.json({ ok: true, message: 'Todos los resultados han sido eliminados' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al limpiar resultados', details: error.message });
+  }
 });
 
 app.get('*', (_req, res) => {
