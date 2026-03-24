@@ -429,6 +429,8 @@ async function clearAllResults() {
     console.error('Error al limpiar resultados:', error);
   }
 }
+
+async function checkDomain() {
   const domain = $('domain-input').value.trim();
   if (!domain) {
     $('domain-result').textContent = 'Escribe un dominio válido para revisar sus registros.';
