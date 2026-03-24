@@ -116,18 +116,31 @@ function renderStats(items) {
 }
 
 async function fetchJson(url, options = {}) {
+  console.log('[FETCH] GET', url, options);
   const opts = { cache: 'no-store', ...options };
-  const response = await fetch(url, opts);
-  if (!response.ok) throw new Error(`Error ${response.status}`);
-  return response.json();
+  try {
+    const response = await fetch(url, opts);
+    console.log('[FETCH] Response status:', response.status, 'for', url);
+    if (!response.ok) throw new Error(`Error ${response.status}`);
+    const data = await response.json();
+    console.log('[FETCH] Response data:', data);
+    return data;
+  } catch (error) {
+    console.error('[FETCH] Error fetching', url, error);
+    throw error;
+  }
 }
 
 async function loadBaseData() {
+  console.log('[DATA] Loading base data...');
   const [config, ipInfo, health] = await Promise.all([
     fetchJson('/api/config'),
     fetchJson('/api/ip'),
     fetchJson('/api/health')
   ]);
+  console.log('[DATA] Loaded config:', config);
+  console.log('[DATA] Loaded ipInfo:', ipInfo);
+  console.log('[DATA] Loaded health:', health);
   state.config = config;
   state.ipInfo = ipInfo;
   state.health = health;
@@ -319,11 +332,16 @@ async function runSpeedTest() {
 }
 
 async function runGeneralTest() {
+  console.log('[TEST] Starting runGeneralTest...');
   $('run-main-test').disabled = true;
   try {
+    console.log('[TEST] Loading base data...');
     await loadBaseData();
+    console.log('[TEST] Base data loaded:', state);
     const latency = await measurePingOnce();
+    console.log('[TEST] Latency measured:', latency);
     const largePayload = await fetchJson('/api/large-payload?mb=2');
+    console.log('[TEST] Large payload fetched:', largePayload);
     updateScores();
     updateTestResults();
     updateOverview(latency, largePayload);
@@ -344,7 +362,9 @@ async function runGeneralTest() {
       ? 'La sesión actual entra por IPv4. El sitio puede seguir mejorando su exposición y preferencia IPv6.'
       : 'No se pudo determinar el protocolo principal de la sesión actual.';
     setText('hero-summary', summary);
+    console.log('[TEST] runGeneralTest completed successfully');
   } catch (error) {
+    console.error('[TEST] Error in runGeneralTest:', error);
     setText('hero-summary', `Ocurrió un error al ejecutar la prueba general: ${error.message}`);
   } finally {
     $('run-main-test').disabled = false;

@@ -90,6 +90,7 @@ function getServerAddresses() {
 }
 
 app.get('/api/config', (_req, res) => {
+  console.log('[API] GET /api/config');
   res.json({
     appName: 'Test_Servicios',
     notes: {
@@ -101,6 +102,7 @@ app.get('/api/config', (_req, res) => {
 app.get('/api/ip', (req, res) => {
   const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   const candidate = normalizeAddress(forwarded || req.socket.remoteAddress || '');
+  console.log('[API] GET /api/ip ->', candidate);
   res.json({
     ip: candidate,
     family: inferFamily(candidate),
@@ -112,6 +114,7 @@ app.get('/api/ip', (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
+  console.log('[API] GET /api/health');
   res.json({
     ok: true,
     service: 'test-servicios',
@@ -164,11 +167,13 @@ app.get('/api/domain-check', async (req, res) => {
 });
 
 app.post('/api/results', async (req, res) => {
+  console.log('[API] POST /api/results');
   try {
     const testData = req.body;
     const savedResult = await saveResult(testData);
     res.json({ ok: true, result: savedResult });
   } catch (error) {
+    console.error('[API] Error saving results:', error.message);
     res.status(500).json({ error: 'Error al guardar resultado', details: error.message });
   }
 });
