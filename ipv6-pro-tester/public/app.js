@@ -174,6 +174,22 @@ function updateScores() {
   setText('ipv4-status', state.scores.ipv4 >= 9 ? 'Operativo' : state.scores.ipv4 >= 6 ? 'Parcial' : 'Bajo');
   setText('ipv6-status', state.scores.ipv6 >= 9 ? 'Operativo' : state.scores.ipv6 >= 6 ? 'Parcial' : 'Bajo');
   setText('general-status', state.scores.readiness >= 9 ? 'Excelente' : state.scores.readiness >= 6 ? 'Aceptable' : 'Requiere ajustes');
+
+  // Actualizar desglose de IPv6
+  const checks = {
+    'check-ipv6-server': hasServerIPv6 ? '✓' : '✗',
+    'check-ipv6-conn': family === 'IPv6' ? '✓' : '✗',
+    'check-dual-stack': (hasServerIPv6 && hasServerIPv4) ? '✓' : '✗',
+    'check-ipv6-latency': 'Pendiente'
+  };
+
+  Object.entries(checks).forEach(([id, value]) => {
+    const el = $(id);
+    if (el) {
+      el.textContent = value;
+      el.style.color = value === '✓' ? '#34d399' : value === '✗' ? '#fb7185' : '';
+    }
+  });
 }
 
 function updateTestResults() {
