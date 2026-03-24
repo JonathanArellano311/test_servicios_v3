@@ -1,60 +1,67 @@
 # Historial de Cambios - Test_Servicios IPv6 Pro Tester
 
-## Versión 1.2.0 - 24 de marzo de 2026 (Segundo Update)
+## Versión 1.3.0 - 24 de marzo de 2026 (Tercer Update)
 
-### ✨ Nuevas Funcionalidades
-- **Tema Oscuro/Claro** 🌙/☀️
-  - Toggle en el header para cambiar entre modo oscuro y claro
-  - Preferencia guardada en localStorage
-  - Archivo: `public/styles.css` - Variables CSS dinámicas
-  - Archivo: `public/app.js` - Funciones `toggleTheme()` y `loadTheme()`
+### ✨ Mejoras Implementadas
+- **Modo Claro Mejorado** 🎨
+  - Colores corregidos leyenda de texto oscuro en fondo claro
+  - Mejor contraste para legibilidad en ambos modos
+  - Variables CSS refinadas para luz
 
-- **Geolocalización** 📍
-  - Muestra país, ciudad, ISP y coordenadas
-  - Integración con API ipapi.co (gratis sin autenticación)
-  - Carga automática al iniciar la aplicación
-  - Archivo: `public/app.js` - Función `loadGeolocation()`
+- **Botón Tema Más Discreto** 🌙/☀️
+  - Más pequeño y minimalista
+  - No ocupa espacio innecesario en el header
+  - Ícono flotante con efecto hover sutil
+  - Opacidad controlada en reposo
 
-- **Exportar Reporte** 📊
-  - Descarga datos de pruebas en formato CSV
-  - Incluye IP, protocolo, puntuaciones y resultados de pruebas
-  - Botón en sección "Resultado técnico"
-  - Archivo: `public/app.js` - Función `exportReport()`
+- **Espacio Expandido para IPv6** 📊
+  - Sección "Desglose IPv6" dedicada
+  - Grid mejorado en layout principal
+  - Mejor visualización de direcciones IPv6 largas
 
-- **Diseño Mejorado**
-  - Estadísticas ahora ocupan ancho completo (span-full)
-  - IPv6 tiene más espacio disponible
-  - Nueva sección de geolocalización a ancho completo
-  - Grid responsivo optimizado
+- **Desglose Detallado de Chequeo IPv6** 📋
+  - Nueva sección "Desglose IPv6" que muestra:
+    ✓ Servidor accesible por IPv6
+    ✓ Conectividad IPv6 activa  
+    ✓ Stack dual-compatible
+    ✓ Latencia aceptable
+  - Actualización en tiempo real durante pruebas
+  - Iconos visuales (✓/✗) para verificaciones
+  - Descriptions claras para cada item
+  - Se actualiza automáticamente al ejecutar prueba general
 
-### 🐛 Correcciones Previas (v1.1.0)
-- Función `checkDomain()` corregida en `public/app.js`
+### 🔧 Cambios Técnicos
+**Archivos Modificados:**
+- `public/index.html` - Nueva sección desglose IPv6
+- `public/styles.css` - Estilos de tema mejorados + botón discreto
+- `public/app.js` - Función updateScores mejorada con desglose
 
-### 📦 Archivos Modificados v1.2.0
-- `public/index.html` - Agregadas secciones geolocalización y controles de tema
-- `public/styles.css` - Variables dinámicas para temas + clase span-full
-- `public/app.js` - Nuevas funciones: toggleTheme, loadTheme, loadGeolocation, exportReport
+### 📊 Estructura de Verificaciones IPv6
+| Chequeo | Puntos | Criterio |
+|---------|---------|----------|
+| Servidor IPv6 | +4 | Servidor expone dirección IPv6 |
+| Conexión IPv6 | +4 | Tu sesión llega por IPv6 |
+| Dual Stack | +2 | Servidor soporta ambos protocolos |
 
-### 🚀 Estado Actual
-- Servidor ejecutándose en puerto 3000
-- Todos los endpoints activos
-- Funcionalidades de UI/UX mejoradas
-- Tema dinámico con persistencia
-- Geolocalización en vivo
-- Exportación de reportes
+**Máximo = 10 puntos cuando:**
+1. Servidor tiene IPv6 disponible ✓
+2. Tu conexión es IPv6 ✓ 
+3. El servidor es dual-stack (IPv4 + IPv6) ✓
 
-### 📥 Sincronización
-- ✅ Cambios replicados en ambas carpetas
-- ✅ Commits registrados en GitHub
-- ✅ Base de datos local (/data/results.json) funcional
+### 🚀 Estado Actual (v1.3.0)
+- ✅ Servidor operativo en puerto 3000
+- ✅ Modo oscuro/claro con mejor contraste
+- ✅ Desglose detallado de verificaciones IPv6
+- ✅ Interfaz más limpia y espaciosa
+- ✅ Botón de tema discreto e intuitivo
 
-### 🎨 Mejoras de UX
-- Header más compacto con controles
-- Layout span-full para secciones principales
-- Geolocalización automática
-- Exportación de datos en un click
+### 📧 Historial de Versiones
+- **v1.3.0** - Mejoras UI/UX + Desglose IPv6
+- **v1.2.0** - Tema oscuro/claro + Geolocalización + Exportar
+- **v1.1.0** - Fix función checkDomain
+- **v1.0.0** - Versión inicial
 
 ---
-**Versión:** 1.2.0  
 **Fecha:** 24-03-2026  
-**Estado:** Producción
+**Estado:** Producción ✅  
+**GitHub:** jona thanarellano311/test_servicios_v3
