@@ -4,6 +4,7 @@ const state = {
   health: null,
   scores: { ipv4: 0, ipv6: 0, readiness: 0 },
   packetRun: { active: false, stopRequested: false },
+  environment: { isInternal: false, reason: '' },
   tests: [
     { id: 'visitor-ip', title: 'Detección de IP', details: 'Pendiente', status: 'pending' },
     { id: 'same-origin', title: 'Respuesta del servidor', details: 'Pendiente', status: 'pending' },
@@ -21,6 +22,26 @@ function formatMs(value) {
 function setText(id, value) {
   const el = $(id);
   if (el) el.textContent = value;
+}
+
+function isPrivateIpv4(value) {
+  if (!value || value.includes(':')) return false;
+  return value.startsWith('10.')
+    || value.startsWith('127.')
+    || value.startsWith('192.168.')
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(value);
+}
+
+function detectInternalEnvironment() {
+  const host = window.location.hostname || '';
+  const observedIp = state.ipInfo?.ip || '';
+  const localHostnames = ['localhost', '127.0.0.1', '::1'];
+  const internalHost = localHostnames.includes(host) || isPrivateIpv4(host);
+  const internalIp = localHostnames.includes(observedIp) || isPrivateIpv4(observedIp);
+
+  state.environment = internalHost || internalIp
+    ? { isInternal: true, reason: 'Pruebas internas/locales detectadas' }
+    : { isInternal: false, reason: 'Entorno con acceso externo o publicado' };
 }
 
 function badgeClass(status) {
@@ -152,6 +173,7 @@ function updateScores() {
   const family = state.ipInfo?.family || 'Desconocido';
   const hasServerIPv6 = (state.health?.serverAddresses || []).some((item) => String(item.family).includes('6') || String(item.address).includes(':'));
   const hasServerIPv4 = (state.health?.serverAddresses || []).some((item) => String(item.family).includes('4') || String(item.address).includes('.'));
+  const internalMode = state.environment.isInternal;
 
   if (hasServerIPv4) ipv4 += 4;
   if (family === 'IPv4') ipv4 += 6;
@@ -160,8 +182,8 @@ function updateScores() {
 
   if (hasServerIPv6) ipv6 += 4;
   if (family === 'IPv6') ipv6 += 6;
-  else if (family === 'IPv4') ipv6 += 2;
-  else ipv6 += 1;
+  else if (family === 'IPv4') ipv6 += internalMode ? 5 : 2;
+  else ipv6 += internalMode ? 4 : 1;
 
   state.scores.ipv4 = Math.min(10, ipv4);
   state.scores.ipv6 = Math.min(10, ipv6);
@@ -172,14 +194,16 @@ function updateScores() {
   setText('readiness-score', `${state.scores.readiness.toFixed(1)}/10`);
 
   setText('ipv4-status', state.scores.ipv4 >= 9 ? 'Operativo' : state.scores.ipv4 >= 6 ? 'Parcial' : 'Bajo');
-  setText('ipv6-status', state.scores.ipv6 >= 9 ? 'Operativo' : state.scores.ipv6 >= 6 ? 'Parcial' : 'Bajo');
+  setText('ipv6-status', internalMode
+    ? (hasServerIPv6 ? 'Disponible' : 'Opcional en local')
+    : (state.scores.ipv6 >= 9 ? 'Operativo' : state.scores.ipv6 >= 6 ? 'Parcial' : 'Bajo'));
   setText('general-status', state.scores.readiness >= 9 ? 'Excelente' : state.scores.readiness >= 6 ? 'Aceptable' : 'Requiere ajustes');
 
   // Actualizar desglose de IPv6
   const checks = {
-    'check-ipv6-server': hasServerIPv6 ? '✓' : '✗',
-    'check-ipv6-conn': family === 'IPv6' ? '✓' : '✗',
-    'check-dual-stack': (hasServerIPv6 && hasServerIPv4) ? '✓' : '✗',
+    'check-ipv6-server': hasServerIPv6 ? '✓' : (internalMode ? 'Local' : '✗'),
+    'check-ipv6-conn': family === 'IPv6' ? '✓' : (internalMode ? 'Local' : '✗'),
+    'check-dual-stack': (hasServerIPv6 && hasServerIPv4) ? '✓' : (internalMode ? 'Local' : '✗'),
     'check-ipv6-latency': 'Pendiente'
   };
 
@@ -187,7 +211,7 @@ function updateScores() {
     const el = $(id);
     if (el) {
       el.textContent = value;
-      el.style.color = value === '✓' ? '#34d399' : value === '✗' ? '#fb7185' : '';
+      el.style.color = value === '✓' ? '#34d399' : value === '✗' ? '#fb7185' : value === 'Local' ? '#fbbf24' : '';
     }
   });
 }
@@ -198,6 +222,7 @@ function updateTestResults() {
   const serverAddresses = state.health?.serverAddresses || [];
   const hasIPv6 = serverAddresses.some((item) => String(item.address).includes(':'));
   const hasIPv4 = serverAddresses.some((item) => String(item.address).includes('.'));
+  const internalMode = state.environment.isInternal;
 
   state.tests[0] = {
     ...state.tests[0],
@@ -219,9 +244,13 @@ function updateTestResults() {
 
   state.tests[3] = {
     ...state.tests[3],
-    status: hasIPv4 && hasIPv6 ? 'ok' : hasIPv4 || hasIPv6 ? 'warn' : 'fail',
+    status: hasIPv4 && hasIPv6 ? 'ok' : hasIPv4 || hasIPv6 ? (internalMode ? 'ok' : 'warn') : 'fail',
     details: hasIPv4 && hasIPv6
       ? 'El servidor expone direcciones IPv4 e IPv6.'
+      : internalMode && hasIPv4
+      ? 'Prueba interna funcional por IPv4 local. IPv6 no es obligatoria para validar el flujo dentro de tu red.'
+      : internalMode && hasIPv6
+      ? 'Prueba interna funcional por IPv6 local.'
       : hasIPv4
       ? 'El servidor solo muestra IPv4 en este entorno.'
       : hasIPv6
@@ -354,6 +383,7 @@ async function runGeneralTest() {
     console.log('[TEST] Loading base data...');
     await loadBaseData();
     console.log('[TEST] Base data loaded:', state);
+    detectInternalEnvironment();
     const latency = await measurePingOnce();
     console.log('[TEST] Latency measured:', latency);
     const largePayload = await fetchJson('/api/large-payload?mb=2');
@@ -372,12 +402,17 @@ async function runGeneralTest() {
     renderTests();
 
     const family = state.ipInfo?.family || 'Desconocido';
-    const summary = family === 'IPv6'
+    const summary = state.environment.isInternal
+      ? 'Modo interno detectado: puedes ejecutar tus pruebas dentro de esta red y validar backend, latencia, paquetes, guardado y DNS sin publicar el sitio.'
+      : family === 'IPv6'
       ? 'La sesión actual entra por IPv6 y el entorno muestra una preparación sólida para este protocolo.'
       : family === 'IPv4'
       ? 'La sesión actual entra por IPv4. El sitio puede seguir mejorando su exposición y preferencia IPv6.'
       : 'No se pudo determinar el protocolo principal de la sesión actual.';
     setText('hero-summary', summary);
+    setText('local-mode-note', state.environment.isInternal
+      ? 'Las pruebas internas están activas. Todo lo principal se valida contra tu servidor local y tu red.'
+      : 'Este entorno parece publicado o externo. Algunas comprobaciones de IPv6 dependen de conectividad real hacia Internet.');
     console.log('[TEST] runGeneralTest completed successfully');
   } catch (error) {
     console.error('[TEST] Error in runGeneralTest:', error);
@@ -531,6 +566,14 @@ function loadTheme() {
 
 // Obtener geolocalización
 async function loadGeolocation() {
+  if (state.environment.isInternal) {
+    $('geo-country').textContent = 'Prueba interna';
+    $('geo-city').textContent = 'Red local';
+    $('geo-isp').textContent = 'No consultado';
+    $('geo-coords').textContent = 'No aplica';
+    return;
+  }
+
   try {
     const response = await fetch('https://ipapi.co/json/');
     const data = await response.json();
@@ -630,8 +673,8 @@ async function init() {
   ]);
   renderPacketStats(0, 0, 20, 0);
   wireEvents();
-  loadGeolocation();
   await runGeneralTest();
+  await loadGeolocation();
   await loadSavedResults();
 }
 
