@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   config: null,
   ipInfo: null,
   health: null,
@@ -400,6 +400,35 @@ function setManualNetworkButtons(running) {
   $('stop-manual-network').disabled = !running;
 }
 
+function resetManualPingCounters() {
+  const counters = $('manual-ping-counters');
+  if (counters) counters.hidden = true;
+  setText('manual-ping-sent', '0');
+  setText('manual-ping-received', '0');
+  setText('manual-ping-lost', '0');
+}
+
+function renderManualPingCounters(sent, received) {
+  const counters = $('manual-ping-counters');
+  if (counters) counters.hidden = false;
+  setText('manual-ping-sent', String(sent));
+  setText('manual-ping-received', String(received));
+  setText('manual-ping-lost', String(Math.max(0, sent - received)));
+}
+
+function updateManualPingCountersFromOutput(output) {
+  const text = String(output || '').toLowerCase();
+  const receivedMatches = text.match(/respuesta desde|reply from/g) || [];
+  const timeoutMatches = text.match(/tiempo de espera agotado|request timed out/g) || [];
+  const unreachableMatches = text.match(/host de destino inaccesible|destination host unreachable|general failure/g) || [];
+
+  const received = receivedMatches.length;
+  const lost = timeoutMatches.length + unreachableMatches.length;
+  const sent = received + lost;
+
+  renderManualPingCounters(sent, received);
+}
+
 async function runManualNetworkTool(tool) {
   const input = $('network-target');
   const output = $('manual-network-output');
@@ -421,6 +450,7 @@ async function runManualNetworkTool(tool) {
   const controller = new AbortController();
   state.manualNetwork = { controller, running: true };
   setManualNetworkButtons(true);
+  resetManualPingCounters();
 
   output.textContent = [
     `Ejecutando ${tool.toUpperCase()} hacia ${target}...`,
@@ -456,6 +486,9 @@ async function runManualNetworkTool(tool) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      if (tool === 'ping') {
+        updateManualPingCountersFromOutput(buffer);
+      }
       output.textContent = buffer;
       output.scrollTop = output.scrollHeight;
     }
@@ -636,6 +669,7 @@ async function init() {
     { label: 'Paquete grande', value: 'Pendiente' },
   ]);
   renderPacketStats(0, 0, 20, 0);
+  resetManualPingCounters();
   setManualNetworkButtons(false);
   $('manual-ping-count').disabled = $('manual-ping-infinite').checked;
   wireEvents();

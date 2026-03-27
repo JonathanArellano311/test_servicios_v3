@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -254,6 +254,20 @@
         <button class="button button-secondary" id="stop-manual-network" disabled>Detener</button>
       </div>
       <p class="section-copy">Escribe una IP, dominio o URL. Verás la salida en vivo mientras el ping o el tracert se está ejecutando.</p>
+      <div class="packet-counter-grid manual-ping-counter-grid" id="manual-ping-counters" hidden>
+        <article class="packet-counter-box">
+          <span>Enviados</span>
+          <strong id="manual-ping-sent">0</strong>
+        </article>
+        <article class="packet-counter-box">
+          <span>Recibidos</span>
+          <strong id="manual-ping-received">0</strong>
+        </article>
+        <article class="packet-counter-box packet-counter-box-loss">
+          <span>Perdidos</span>
+          <strong id="manual-ping-lost">0</strong>
+        </article>
+      </div>
       <div class="packet-log packet-log-live" id="manual-network-output">Aún no se ha ejecutado ninguna prueba manual.</div>
     </section>
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const dns = require('dns').promises;
 const { spawn } = require('child_process');
 
@@ -44,6 +45,11 @@ function getServerAddresses() {
 function normalizeTarget(input) {
   const raw = String(input || '').trim();
   if (!raw || raw.length > 255) return null;
+
+  const ipv6Candidate = raw.replace(/^\[|\]$/g, '');
+  if (net.isIP(ipv6Candidate) === 6) {
+    return ipv6Candidate;
+  }
 
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
 

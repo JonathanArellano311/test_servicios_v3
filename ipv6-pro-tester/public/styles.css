@@ -319,6 +319,41 @@ input {
   border: 1px solid var(--border);
   white-space: pre-line;
 }
+
+.packet-counter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.manual-ping-counter-grid {
+  margin-top: 14px;
+}
+
+.packet-counter-box {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+}
+
+.packet-counter-box span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.packet-counter-box strong {
+  font-size: 2rem;
+  line-height: 1;
+  color: #7dd3fc;
+}
+
+.packet-counter-box-loss strong {
+  color: #fda4af;
+}
 .packet-log-live {
   min-height: 320px;
   max-height: 360px;
@@ -370,7 +405,7 @@ input {
 }
 
 @media (max-width: 780px) {
-  .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container { grid-template-columns: 1fr; }
+  .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container, .packet-counter-grid { grid-template-columns: 1fr; }
   .hero-card, .span-2 { grid-column: span 1; }
   .domain-field input { min-width: 100%; }
 }
