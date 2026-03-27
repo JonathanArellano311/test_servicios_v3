@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Test_Servicios</title>
-  <meta name="description" content="Prueba profesional de IPv4, IPv6, latencia, jitter, pérdida estimada y validación de dominio." />
+  <title>Centro de Diagnóstico de Red</title>
+  <meta name="description" content="Plataforma profesional para diagnóstico de conectividad IPv4, IPv6, latencia, pérdida, velocidad y validación DNS." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -14,13 +14,12 @@
   <header class="site-header">
     <div class="container">
       <div class="brand-block">
-        <div class="eyebrow">Herramienta de diagnóstico de red</div>
-        <h1>Test_Servicios</h1>
-        <p>Verifica conectividad IPv4 / IPv6, latencia, jitter, pérdida estimada, paquetes grandes y resolución DNS de dominios.</p>
+        <div class="eyebrow">Plataforma profesional de análisis de conectividad</div>
+        <h1>Centro de Diagnóstico de Red</h1>
+        <p>Evalúa conectividad IPv4 e IPv6, latencia, jitter, pérdida estimada, rendimiento local y resolución DNS desde una sola vista operativa.</p>
       </div>
       <div class="header-controls">
-        <button class="theme-toggle" id="toggle-theme" title="Cambiar tema"><span id="theme-icon">🌙</span></button>
-        <button class="button button-primary" id="run-main-test">Ejecutar prueba general</button>
+        <button class="button button-primary" id="run-main-test">Ejecutar diagnóstico general</button>
       </div>
     </div>
   </header>
@@ -45,10 +44,10 @@
         </div>
       </div>
       <div class="hero-summary" id="hero-summary">
-        Ejecuta la prueba para ver el estado de tu conexión y si el sitio está listo para trabajar con IPv6.
+        Ejecuta el diagnóstico para obtener una lectura clara del estado de tu red y su preparación para operar con IPv6.
       </div>
       <div class="section-copy" id="local-mode-note" style="margin-top: 14px;">
-        Las pruebas internas usan tu red local y este mismo servidor. Son ideales para validar funcionamiento dentro de VS Code o tu LAN.
+        Las pruebas internas utilizan tu red local y este mismo servidor. Son ideales para validar conectividad, backend y tiempos de respuesta dentro de tu entorno.
       </div>
     </section>
 
@@ -56,7 +55,7 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Análisis detallado</div>
-          <h2>Desglose IPv6</h2>
+          <h2>Estado de IPv6</h2>
         </div>
       </div>
       <div id="ipv6-breakdown" style="display: grid; gap: 12px;">
@@ -105,10 +104,10 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Conectividad</div>
-          <h2>Resultado técnico</h2>
+          <h2>Resumen técnico</h2>
         </div>
         <div class="inline-controls">
-          <button class="button button-secondary" id="export-report">📊 Exportar</button>
+          <button class="button button-secondary" id="export-report">Exportar reporte</button>
         </div>
       </div>
       <div class="stats-grid" id="network-stats"></div>
@@ -118,7 +117,7 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Ubicación</div>
-          <h2>Geolocalización</h2>
+          <h2>Contexto geográfico</h2>
         </div>
       </div>
       <div class="stats-grid">
@@ -145,7 +144,7 @@
       <div class="section-head section-head-wrap">
         <div>
           <div class="eyebrow">Pérdida estimada</div>
-          <h2>Test de paquetes</h2>
+          <h2>Prueba de paquetes</h2>
         </div>
         <div class="inline-controls">
           <label>
@@ -158,7 +157,7 @@
           </label>
         </div>
       </div>
-      <p class="section-copy">Esta prueba usa solicitudes HTTP repetidas al servidor para estimar pérdida, latencia y jitter. También puedes dejarla corriendo en modo continuo y detenerla cuando quieras.</p>
+      <p class="section-copy">Esta prueba utiliza solicitudes HTTP repetidas al servidor para estimar pérdida, latencia y jitter. También puedes dejarla corriendo en modo continuo y detenerla cuando quieras.</p>
       <div class="button-row">
         <button class="button button-primary" id="start-packet-test">Iniciar prueba</button>
         <button class="button button-secondary" id="start-continuous-test">Modo continuo</button>
@@ -208,7 +207,7 @@
           <h2>Speed test</h2>
         </div>
       </div>
-      <p class="section-copy">Puedes abrir pruebas externas o usar una medición rápida local del servidor actual.</p>
+      <p class="section-copy">Puedes abrir pruebas externas o ejecutar una medición rápida local sobre el servidor actual.</p>
       <div class="button-row button-row-stack">
         <button class="button button-primary" id="run-local-speed">Prueba rápida local</button>
         <a class="button button-secondary" href="https://www.speedtest.net" target="_blank" rel="noreferrer">Abrir Speedtest</a>
@@ -253,7 +252,7 @@
         <button class="button button-secondary" id="run-manual-tracert">Tracert</button>
         <button class="button button-secondary" id="stop-manual-network" disabled>Detener</button>
       </div>
-      <p class="section-copy">Escribe una IP, dominio o URL. Verás la salida en vivo mientras el ping o el tracert se está ejecutando.</p>
+      <p class="section-copy">Escribe una IP, dominio o URL. Verás la salida en vivo mientras el ping o el tracert se ejecutan.</p>
       <div class="packet-counter-grid manual-ping-counter-grid" id="manual-ping-counters" hidden>
         <article class="packet-counter-box">
           <span>Enviados</span>
@@ -285,13 +284,13 @@
           <button class="button button-primary" id="check-domain">Revisar dominio</button>
         </div>
       </div>
-      <div class="domain-result" id="domain-result">Ingresa un dominio para comprobar si tiene registros A y AAAA.</div>
+      <div class="domain-result" id="domain-result">Ingresa un dominio para comprobar si dispone de registros A y AAAA.</div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="container footer-content">
-      <p>© 2026 Test_Servicios. Todos los derechos reservados.</p>
+      <p>© 2026 Centro de Diagnóstico de Red. Todos los derechos reservados.</p>
       <p>Elaborado por Networx Solutions C.A. para uso autorizado.</p>
       <p>Propietario y titular de la plataforma: Ing. Jonathan Arellano.</p>
     </div>

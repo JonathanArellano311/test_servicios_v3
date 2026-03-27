@@ -539,32 +539,6 @@ async function checkDomain() {
   }
 }
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const isDark = html.classList.contains('light-mode');
-  if (isDark) {
-    html.classList.remove('light-mode');
-    localStorage.setItem('theme', 'dark');
-    $('theme-icon').textContent = '🌙';
-  } else {
-    html.classList.add('light-mode');
-    localStorage.setItem('theme', 'light');
-    $('theme-icon').textContent = '☀️';
-  }
-}
-
-function loadTheme() {
-  const theme = localStorage.getItem('theme') || 'dark';
-  const html = document.documentElement;
-  if (theme === 'light') {
-    html.classList.add('light-mode');
-    $('theme-icon').textContent = '☀️';
-  } else {
-    html.classList.remove('light-mode');
-    $('theme-icon').textContent = '🌙';
-  }
-}
-
 async function loadGeolocation() {
   if (state.environment.isInternal) {
     $('geo-country').textContent = 'Prueba interna';
@@ -598,7 +572,7 @@ function exportReport() {
   };
 
   const csv = [
-    ['Test_Servicios - Reporte', ''],
+    ['Centro de Diagnóstico de Red - Reporte', ''],
     ['Fecha', new Date(reportData.timestamp).toLocaleString()],
     [''],
     ['=== RESULTADOS ===', ''],
@@ -641,7 +615,6 @@ function wireEvents() {
   $('manual-ping-infinite').addEventListener('change', (event) => {
     $('manual-ping-count').disabled = event.target.checked;
   });
-  $('toggle-theme').addEventListener('click', toggleTheme);
   $('export-report').addEventListener('click', exportReport);
   $('stop-packet-test').addEventListener('click', () => { state.packetRun.stopRequested = true; });
 
@@ -658,7 +631,6 @@ function wireEvents() {
 }
 
 async function init() {
-  loadTheme();
   renderTests();
   renderStats([
     { label: 'IP detectada', value: 'Pendiente' },
