@@ -4,6 +4,7 @@ const state = {
   health: null,
   scores: { ipv4: 0, ipv6: 0, readiness: 0 },
   packetRun: { active: false, stopRequested: false },
+  manualNetwork: { controller: null, running: false },
   environment: { isInternal: false, reason: '' },
   tests: [
     { id: 'visitor-ip', title: 'Detección de IP', details: 'Pendiente', status: 'pending' },
@@ -70,14 +71,14 @@ function renderTests() {
   `).join('');
 }
 
-function updateProgressRing(ringId, current, total, label) {
+function updateProgressRing(ringId, current, total) {
   const ring = $(ringId);
   if (!ring) return;
-  
-  const circumference = 314.159; // 2 * π * 50
+
+  const circumference = 314.159;
   const percentage = total > 0 ? (current / total) * 100 : 0;
   const offset = circumference - (percentage / 100) * circumference;
-  
+
   ring.style.strokeDashoffset = offset;
   ring.style.setProperty('--progress', `${percentage}%`);
 }
@@ -85,16 +86,14 @@ function updateProgressRing(ringId, current, total, label) {
 function updateLossIndicator(sent, received) {
   const lossRing = $('ring-loss');
   if (!lossRing) return;
-  
+
   const circumference = 314.159;
   const lost = sent > 0 ? sent - received : 0;
   const lossPercentage = sent > 0 ? (lost / sent) * 100 : 0;
   const offset = circumference - (lossPercentage / 100) * circumference;
-  
+
   lossRing.style.strokeDashoffset = offset;
   lossRing.style.setProperty('--loss', `${lossPercentage}%`);
-  
-  // Si hay pérdida, mostrar la línea blanca
   lossRing.style.opacity = lossPercentage > 0 ? '0.8' : '0';
 }
 
@@ -105,25 +104,19 @@ function formatTime(seconds) {
 }
 
 function renderPacketStats(sent, received, count, elapsed) {
-  // Update sent ring
   $('val-sent').textContent = String(sent);
   $('total-sent').textContent = `/ ${count}`;
-  const sentPct = count > 0 ? ((sent / count) * 100).toFixed(0) : 0;
-  $('pct-sent').textContent = `${sentPct}%`;
-  updateProgressRing('ring-sent', sent, count, 'Enviados');
+  $('pct-sent').textContent = `${count > 0 ? ((sent / count) * 100).toFixed(0) : 0}%`;
+  updateProgressRing('ring-sent', sent, count);
 
-  // Update time ring (solo contador, sin ring de progreso)
   $('val-time').textContent = formatTime(elapsed);
-  $('total-time').textContent = `/ 0:00`;
-  
-  // Update received ring
+  $('total-time').textContent = '/ 0:00';
+
   $('val-received').textContent = String(received);
   $('total-received').textContent = `/ ${count}`;
-  const receivedPct = count > 0 ? ((received / count) * 100).toFixed(0) : 0;
-  $('pct-received').textContent = `${receivedPct}%`;
-  updateProgressRing('ring-received', received, count, 'Recibidos');
-  
-  // Update loss indicator (línea blanca)
+  $('pct-received').textContent = `${count > 0 ? ((received / count) * 100).toFixed(0) : 0}%`;
+  updateProgressRing('ring-received', received, count);
+
   updateLossIndicator(sent, received);
 }
 
@@ -137,31 +130,18 @@ function renderStats(items) {
 }
 
 async function fetchJson(url, options = {}) {
-  console.log('[FETCH] GET', url, options);
-  const opts = { cache: 'no-store', ...options };
-  try {
-    const response = await fetch(url, opts);
-    console.log('[FETCH] Response status:', response.status, 'for', url);
-    if (!response.ok) throw new Error(`Error ${response.status}`);
-    const data = await response.json();
-    console.log('[FETCH] Response data:', data);
-    return data;
-  } catch (error) {
-    console.error('[FETCH] Error fetching', url, error);
-    throw error;
-  }
+  const response = await fetch(url, { cache: 'no-store', ...options });
+  if (!response.ok) throw new Error(`Error ${response.status}`);
+  return response.json();
 }
 
 async function loadBaseData() {
-  console.log('[DATA] Loading base data...');
   const [config, ipInfo, health] = await Promise.all([
     fetchJson('/api/config'),
     fetchJson('/api/ip'),
     fetchJson('/api/health')
   ]);
-  console.log('[DATA] Loaded config:', config);
-  console.log('[DATA] Loaded ipInfo:', ipInfo);
-  console.log('[DATA] Loaded health:', health);
+
   state.config = config;
   state.ipInfo = ipInfo;
   state.health = health;
@@ -199,7 +179,6 @@ function updateScores() {
     : (state.scores.ipv6 >= 9 ? 'Operativo' : state.scores.ipv6 >= 6 ? 'Parcial' : 'Bajo'));
   setText('general-status', state.scores.readiness >= 9 ? 'Excelente' : state.scores.readiness >= 6 ? 'Aceptable' : 'Requiere ajustes');
 
-  // Actualizar desglose de IPv6
   const checks = {
     'check-ipv6-server': hasServerIPv6 ? '✓' : (internalMode ? 'Local' : '✗'),
     'check-ipv6-conn': family === 'IPv6' ? '✓' : (internalMode ? 'Local' : '✗'),
@@ -265,6 +244,7 @@ function updateOverview(latency = 0, largePayload = null) {
   const addresses = state.health?.serverAddresses || [];
   const primaryIPv6 = addresses.find((item) => String(item.address).includes(':'))?.address || 'No detectada';
   const primaryIPv4 = addresses.find((item) => String(item.address).includes('.'))?.address || 'No detectada';
+
   renderStats([
     { label: 'IP detectada', value: state.ipInfo?.ip || 'No disponible' },
     { label: 'Protocolo observado', value: state.ipInfo?.family || 'Desconocido' },
@@ -313,11 +293,10 @@ async function runPacketTest({ count, interval, continuous }) {
       const latency = await measurePingOnce();
       received += 1;
       latencies.push(latency);
-    } catch (error) {
+    } catch (_error) {
       failures += 1;
     }
 
-    const average = latencies.length ? latencies.reduce((acc, value) => acc + value, 0) / latencies.length : 0;
     const jitter = calculateJitter(latencies);
     const min = latencies.length ? Math.min(...latencies) : 0;
     const max = latencies.length ? Math.max(...latencies) : 0;
@@ -325,7 +304,6 @@ async function runPacketTest({ count, interval, continuous }) {
     const elapsed = (performance.now() - startedAt) / 1000;
 
     renderPacketStats(sent, received, count, elapsed);
-
     $('packet-log').textContent = [
       continuous ? 'Modo continuo activo (test local).' : `Prueba en ejecución: ${sent}/${count} (local).`,
       `Latencia mínima: ${formatMs(min)}`,
@@ -333,7 +311,7 @@ async function runPacketTest({ count, interval, continuous }) {
       `Pérdida estimada: ${loss.toFixed(2)} %`,
       `Jitter: ${formatMs(jitter)}`,
       `Fallos: ${failures}`,
-      state.packetRun.stopRequested ? 'Deteniendo prueba...' : 'Presiona “Detener” para finalizar.'
+      state.packetRun.stopRequested ? 'Deteniendo prueba...' : 'Presiona "Detener" para finalizar.'
     ].join('\n');
 
     if (state.packetRun.stopRequested) break;
@@ -359,7 +337,7 @@ async function runSpeedTest() {
   $('run-local-speed').disabled = true;
   try {
     const start = performance.now();
-    const response = await fetch('/api/speed-payload?ts=' + Date.now(), { cache: 'no-store' });
+    const response = await fetch(`/api/speed-payload?ts=${Date.now()}`, { cache: 'no-store' });
     const blob = await response.blob();
     const elapsedSeconds = (performance.now() - start) / 1000;
     const bits = blob.size * 8;
@@ -369,7 +347,7 @@ async function runSpeedTest() {
 
     const latency = await measurePingOnce();
     setText('speed-latency', formatMs(latency));
-  } catch (error) {
+  } catch (_error) {
     setText('speed-download', 'Error');
   } finally {
     $('run-local-speed').disabled = false;
@@ -377,17 +355,12 @@ async function runSpeedTest() {
 }
 
 async function runGeneralTest() {
-  console.log('[TEST] Starting runGeneralTest...');
   $('run-main-test').disabled = true;
   try {
-    console.log('[TEST] Loading base data...');
     await loadBaseData();
-    console.log('[TEST] Base data loaded:', state);
     detectInternalEnvironment();
     const latency = await measurePingOnce();
-    console.log('[TEST] Latency measured:', latency);
     const largePayload = await fetchJson('/api/large-payload?mb=2');
-    console.log('[TEST] Large payload fetched:', largePayload);
     updateScores();
     updateTestResults();
     updateOverview(latency, largePayload);
@@ -403,101 +376,98 @@ async function runGeneralTest() {
 
     const family = state.ipInfo?.family || 'Desconocido';
     const summary = state.environment.isInternal
-      ? 'Modo interno detectado: puedes ejecutar tus pruebas dentro de esta red y validar backend, latencia, paquetes, guardado y DNS sin publicar el sitio.'
+      ? 'Modo interno detectado: puedes ejecutar tus pruebas dentro de esta red y validar backend, latencia, paquetes, ping, tracert y DNS sin publicar el sitio.'
       : family === 'IPv6'
       ? 'La sesión actual entra por IPv6 y el entorno muestra una preparación sólida para este protocolo.'
       : family === 'IPv4'
       ? 'La sesión actual entra por IPv4. El sitio puede seguir mejorando su exposición y preferencia IPv6.'
       : 'No se pudo determinar el protocolo principal de la sesión actual.';
+
     setText('hero-summary', summary);
     setText('local-mode-note', state.environment.isInternal
       ? 'Las pruebas internas están activas. Todo lo principal se valida contra tu servidor local y tu red.'
       : 'Este entorno parece publicado o externo. Algunas comprobaciones de IPv6 dependen de conectividad real hacia Internet.');
-    console.log('[TEST] runGeneralTest completed successfully');
   } catch (error) {
-    console.error('[TEST] Error in runGeneralTest:', error);
     setText('hero-summary', `Ocurrió un error al ejecutar la prueba general: ${error.message}`);
   } finally {
     $('run-main-test').disabled = false;
   }
 }
 
-async function saveCurrentResults() {
+function setManualNetworkButtons(running) {
+  $('run-manual-ping').disabled = running;
+  $('run-manual-tracert').disabled = running;
+  $('stop-manual-network').disabled = !running;
+}
+
+async function runManualNetworkTool(tool) {
+  const input = $('network-target');
+  const output = $('manual-network-output');
+  const target = input.value.trim();
+  const pingInfinite = $('manual-ping-infinite').checked;
+  const pingCount = Math.max(4, Number($('manual-ping-count').value || 4));
+  const maxHops = Math.min(30, Math.max(1, Number($('manual-tracert-hops').value || 12)));
+
+  if (!target) {
+    output.textContent = 'Escribe primero una IP, dominio o URL válida.';
+    input.focus();
+    return;
+  }
+
+  if (state.manualNetwork.controller) {
+    state.manualNetwork.controller.abort();
+  }
+
+  const controller = new AbortController();
+  state.manualNetwork = { controller, running: true };
+  setManualNetworkButtons(true);
+
+  output.textContent = [
+    `Ejecutando ${tool.toUpperCase()} hacia ${target}...`,
+    tool === 'ping'
+      ? `Cantidad: ${pingInfinite ? 'infinito' : pingCount}`
+      : `Saltos máximos: ${maxHops}`,
+    ''
+  ].join('\n');
+
   try {
-    $('save-test-btn').disabled = true;
-    const testData = {
-      ipInfo: state.ipInfo,
-      scores: state.scores,
-      tests: state.tests,
-      timestamp: new Date().toISOString(),
-    };
-    const response = await fetchJson('/api/results', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(testData),
+    const query = new URLSearchParams({
+      tool,
+      target,
+      count: String(pingCount),
+      infinite: pingInfinite ? 'true' : 'false',
+      maxHops: String(maxHops),
     });
-    if (response.ok) {
-      setText('save-status', '✓ Resultado guardado correctamente');
-      setTimeout(() => setText('save-status', ''), 2000);
-      await loadSavedResults();
+
+    const response = await fetch(`/api/network-tool/stream?${query.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Error ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = output.textContent;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      output.textContent = buffer;
+      output.scrollTop = output.scrollHeight;
     }
   } catch (error) {
-    setText('save-status', '✗ Error al guardar: ' + error.message);
+    if (error.name === 'AbortError') {
+      output.textContent += '\n\n[Proceso detenido por el usuario]\n';
+    } else {
+      output.textContent += `\n\nNo fue posible ejecutar ${tool}: ${error.message}\n`;
+    }
   } finally {
-    $('save-test-btn').disabled = false;
-  }
-}
-
-async function loadSavedResults() {
-  try {
-    const results = await fetchJson('/api/results');
-    const container = $('results-history');
-    if (!container) return;
-    
-    if (!Array.isArray(results) || results.length === 0) {
-      container.innerHTML = '<p style="padding: 1rem;">No hay resultados guardados aún.</p>';
-      return;
-    }
-
-    container.innerHTML = results.reverse().map((result) => `
-      <div style="padding: 1rem; border-bottom: 1px solid #333; margin-bottom: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong>${new Date(result.saveTime).toLocaleString()}</strong>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #888;">
-              Readiness: ${result.scores.readiness}/10 | IPv4: ${result.scores.ipv4}/10 | IPv6: ${result.scores.ipv6}/10
-            </p>
-          </div>
-          <button onclick="deleteResult(${result.id})" style="padding: 0.25rem 0.5rem; cursor: pointer;">
-            Eliminar
-          </button>
-        </div>
-      </div>
-    `).join('');
-  } catch (error) {
-    console.error('Error al cargar resultados:', error);
-  }
-}
-
-async function deleteResult(id) {
-  if (!confirm('¿Estás seguro de que quieres eliminar este resultado?')) return;
-  try {
-    await fetch(`/api/results/${id}`, { method: 'DELETE' });
-    await loadSavedResults();
-  } catch (error) {
-    console.error('Error al eliminar resultado:', error);
-  }
-}
-
-async function clearAllResults() {
-  if (!confirm('¿Estás seguro de que quieres eliminar TODOS los resultados guardados?')) return;
-  try {
-    await fetch('/api/results', { method: 'DELETE' });
-    await loadSavedResults();
-    setText('save-status', '✓ Todos los resultados han sido eliminados');
-    setTimeout(() => setText('save-status', ''), 2000);
-  } catch (error) {
-    console.error('Error al limpiar resultados:', error);
+    state.manualNetwork = { controller: null, running: false };
+    setManualNetworkButtons(false);
   }
 }
 
@@ -536,7 +506,6 @@ async function checkDomain() {
   }
 }
 
-// Toggle de tema oscuro/claro
 function toggleTheme() {
   const html = document.documentElement;
   const isDark = html.classList.contains('light-mode');
@@ -551,7 +520,6 @@ function toggleTheme() {
   }
 }
 
-// Cargar tema guardado
 function loadTheme() {
   const theme = localStorage.getItem('theme') || 'dark';
   const html = document.documentElement;
@@ -564,7 +532,6 @@ function loadTheme() {
   }
 }
 
-// Obtener geolocalización
 async function loadGeolocation() {
   if (state.environment.isInternal) {
     $('geo-country').textContent = 'Prueba interna';
@@ -581,8 +548,7 @@ async function loadGeolocation() {
     $('geo-city').textContent = data.city || '-';
     $('geo-isp').textContent = data.org || '-';
     $('geo-coords').textContent = `${data.latitude}, ${data.longitude}` || '-';
-  } catch (error) {
-    console.log('No se pudo cargar geolocalización:', error);
+  } catch (_error) {
     $('geo-country').textContent = 'Error al cargar';
     $('geo-city').textContent = 'Error al cargar';
     $('geo-isp').textContent = 'Error al cargar';
@@ -590,7 +556,6 @@ async function loadGeolocation() {
   }
 }
 
-// Exportar reporte
 function exportReport() {
   const reportData = {
     timestamp: new Date().toISOString(),
@@ -608,18 +573,18 @@ function exportReport() {
     ['Protocolo', reportData.ipInfo?.family || '-'],
     [''],
     ['=== PUNTUACIONES ===', ''],
-    ['IPv4', reportData.scores.ipv4 + '/10'],
-    ['IPv6', reportData.scores.ipv6 + '/10'],
-    ['Readiness General', reportData.scores.readiness + '/10'],
+    ['IPv4', `${reportData.scores.ipv4}/10`],
+    ['IPv6', `${reportData.scores.ipv6}/10`],
+    ['Readiness General', `${reportData.scores.readiness}/10`],
     [''],
     ['=== PRUEBAS ===', '']
   ];
 
-  reportData.tests.forEach(test => {
+  reportData.tests.forEach((test) => {
     csv.push([test.title, test.status, test.details]);
   });
 
-  const csvContent = csv.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const csvContent = csv.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -633,20 +598,19 @@ function wireEvents() {
   $('run-main-test').addEventListener('click', runGeneralTest);
   $('run-local-speed').addEventListener('click', runSpeedTest);
   $('check-domain').addEventListener('click', checkDomain);
+  $('run-manual-ping').addEventListener('click', () => runManualNetworkTool('ping'));
+  $('run-manual-tracert').addEventListener('click', () => runManualNetworkTool('tracert'));
+  $('stop-manual-network').addEventListener('click', () => {
+    if (state.manualNetwork.controller) {
+      state.manualNetwork.controller.abort();
+    }
+  });
+  $('manual-ping-infinite').addEventListener('change', (event) => {
+    $('manual-ping-count').disabled = event.target.checked;
+  });
   $('toggle-theme').addEventListener('click', toggleTheme);
   $('export-report').addEventListener('click', exportReport);
   $('stop-packet-test').addEventListener('click', () => { state.packetRun.stopRequested = true; });
-
-  // Botones de guardar resultados (si existen)
-  const saveBtn = $('save-test-btn');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', saveCurrentResults);
-  }
-
-  const clearBtn = $('clear-results-btn');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', clearAllResults);
-  }
 
   $('start-packet-test').addEventListener('click', async () => {
     const count = Math.max(1, Number($('packet-count').value || 20));
@@ -672,10 +636,11 @@ async function init() {
     { label: 'Paquete grande', value: 'Pendiente' },
   ]);
   renderPacketStats(0, 0, 20, 0);
+  setManualNetworkButtons(false);
+  $('manual-ping-count').disabled = $('manual-ping-infinite').checked;
   wireEvents();
   await runGeneralTest();
   await loadGeolocation();
-  await loadSavedResults();
 }
 
 init();

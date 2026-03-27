@@ -63,28 +63,28 @@
         <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: var(--muted); font-size: 0.9rem;">Servidor accesible por IPv6</span>
-            <span style="font-size: 0.9rem;" id="check-ipv6-server">▢</span>
+            <span style="font-size: 0.9rem;" id="check-ipv6-server">■</span>
           </div>
           <p style="margin: 6px 0 0; color: var(--muted); font-size: 0.85rem;">El servidor expone dirección IPv6</p>
         </div>
         <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: var(--muted); font-size: 0.9rem;">Conectividad IPv6 activa</span>
-            <span style="font-size: 0.9rem;" id="check-ipv6-conn">▢</span>
+            <span style="font-size: 0.9rem;" id="check-ipv6-conn">■</span>
           </div>
           <p style="margin: 6px 0 0; color: var(--muted); font-size: 0.85rem;">Tu conexión llega como IPv6</p>
         </div>
         <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: var(--muted); font-size: 0.9rem;">Stack dual-compatible</span>
-            <span style="font-size: 0.9rem;" id="check-dual-stack">▢</span>
+            <span style="font-size: 0.9rem;" id="check-dual-stack">■</span>
           </div>
           <p style="margin: 6px 0 0; color: var(--muted); font-size: 0.85rem;">Servidor soporta IPv4 e IPv6</p>
         </div>
         <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: var(--muted); font-size: 0.9rem;">Latencia aceptable</span>
-            <span style="font-size: 0.9rem;" id="check-ipv6-latency">▢</span>
+            <span style="font-size: 0.9rem;" id="check-ipv6-latency">■</span>
           </div>
           <p style="margin: 6px 0 0; color: var(--muted); font-size: 0.85rem;">Respuesta &lt; 200ms en IPv6</p>
         </div>
@@ -224,6 +224,42 @@
     <section class="card span-2">
       <div class="section-head section-head-wrap">
         <div>
+          <div class="eyebrow">Diagnóstico manual</div>
+          <h2>Ping y Tracert</h2>
+        </div>
+        <div class="inline-controls domain-controls">
+          <label class="domain-field">
+            <span>Destino</span>
+            <input type="text" id="network-target" placeholder="google.com o https://google.com" />
+          </label>
+        </div>
+      </div>
+      <div class="inline-controls" style="margin-bottom: 14px;">
+        <label>
+          <span>Pings</span>
+          <input type="number" id="manual-ping-count" min="4" step="1" value="4" />
+        </label>
+        <label style="display: flex; align-items: end; gap: 8px;">
+          <input type="checkbox" id="manual-ping-infinite" />
+          <span>Infinito</span>
+        </label>
+        <label>
+          <span>Saltos Tracert</span>
+          <input type="number" id="manual-tracert-hops" min="1" max="30" step="1" value="12" />
+        </label>
+      </div>
+      <div class="button-row">
+        <button class="button button-primary" id="run-manual-ping">Ping</button>
+        <button class="button button-secondary" id="run-manual-tracert">Tracert</button>
+        <button class="button button-secondary" id="stop-manual-network" disabled>Detener</button>
+      </div>
+      <p class="section-copy">Escribe una IP, dominio o URL. Verás la salida en vivo mientras el ping o el tracert se está ejecutando.</p>
+      <div class="packet-log packet-log-live" id="manual-network-output">Aún no se ha ejecutado ninguna prueba manual.</div>
+    </section>
+
+    <section class="card">
+      <div class="section-head section-head-wrap">
+        <div>
           <div class="eyebrow">DNS</div>
           <h2>Verificador de dominio</h2>
         </div>
@@ -236,23 +272,6 @@
         </div>
       </div>
       <div class="domain-result" id="domain-result">Ingresa un dominio para comprobar si tiene registros A y AAAA.</div>
-    </section>
-
-    <section class="card span-2">
-      <div class="section-head section-head-wrap">
-        <div>
-          <div class="eyebrow">Historial</div>
-          <h2>Resultados guardados</h2>
-        </div>
-        <div class="inline-controls">
-          <button class="button button-primary" id="save-test-btn">💾 Guardar resultado</button>
-          <button class="button button-secondary" id="clear-results-btn">🗑️ Limpiar historial</button>
-        </div>
-      </div>
-      <div id="save-status" style="margin: 1rem 0; text-align: center; font-weight: 600; min-height: 1.5rem;"></div>
-      <div id="results-history" style="max-height: 400px; overflow-y: auto;">
-        <p style="padding: 1rem;">Cargando resultados...</p>
-      </div>
     </section>
   </main>
 

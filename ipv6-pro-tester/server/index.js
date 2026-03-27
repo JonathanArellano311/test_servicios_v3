@@ -2,62 +2,14 @@ const express = require('express');
 const os = require('os');
 const path = require('path');
 const dns = require('dns').promises;
-const fs = require('fs').promises;
-const fsSync = require('fs');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-const DATA_FILE = path.join(__dirname, '..', 'data', 'results.json');
-const DATA_DIR = path.join(__dirname, '..', 'data');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// Asegurar que existe el directorio de datos
-async function ensureDataDir() {
-  try {
-    if (!fsSync.existsSync(DATA_DIR)) {
-      fsSync.mkdirSync(DATA_DIR, { recursive: true });
-    }
-  } catch (error) {
-    console.error('Error al crear directorio de datos:', error.message);
-  }
-}
-
-// Cargar resultados guardados
-async function loadResults() {
-  try {
-    if (fsSync.existsSync(DATA_FILE)) {
-      const data = await fs.readFile(DATA_FILE, 'utf-8');
-      return JSON.parse(data);
-    }
-    return [];
-  } catch (error) {
-    console.error('Error al cargar resultados:', error.message);
-    return [];
-  }
-}
-
-// Guardar resultado
-async function saveResult(result) {
-  try {
-    await ensureDataDir();
-    const results = await loadResults();
-    result.id = Date.now();
-    result.saveTime = new Date().toISOString();
-    results.push(result);
-    // Mantener solo los últimos 100 resultados
-    if (results.length > 100) {
-      results.shift();
-    }
-    await fs.writeFile(DATA_FILE, JSON.stringify(results, null, 2));
-    return result;
-  } catch (error) {
-    console.error('Error al guardar resultado:', error.message);
-    throw error;
-  }
-}
 
 function normalizeAddress(address) {
   if (!address) return null;
@@ -89,13 +41,48 @@ function getServerAddresses() {
   return results;
 }
 
+function normalizeTarget(input) {
+  const raw = String(input || '').trim();
+  if (!raw || raw.length > 255) return null;
+
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const parsed = new URL(candidate);
+    return parsed.hostname || null;
+  } catch (_error) {
+    if (/^[a-z0-9.-]+$/i.test(raw)) {
+      return raw.replace(/^\.+|\.+$/g, '');
+    }
+    return null;
+  }
+}
+
+function buildNetworkCommand(tool, target, options = {}) {
+  const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', `${tool}.exe`);
+
+  if (tool === 'ping') {
+    const count = options.infinite ? null : Math.min(Math.max(Number(options.count) || 4, 1), 999);
+    return {
+      executable,
+      args: count === null ? ['-t', target] : ['-n', String(count), target],
+    };
+  }
+
+  const maxHops = Math.min(Math.max(Number(options.maxHops) || 12, 1), 30);
+  return {
+    executable,
+    args: ['-d', '-h', String(maxHops), target],
+  };
+}
+
 app.get('/api/config', (_req, res) => {
   console.log('[API] GET /api/config');
   res.json({
     appName: 'Test_Servicios',
     notes: {
-      localMode: 'En local puedes validar interfaz, backend y lógica. Para pruebas IPv6 externas completas necesitas publicar el sitio en un servidor con IPv4, IPv6 y DNS adecuado.'
-    }
+      localMode: 'En local puedes validar interfaz, backend, ping, tracert y lógica. Para pruebas IPv6 externas completas necesitas publicar el sitio en un servidor con IPv4, IPv6 y DNS adecuado.',
+    },
   });
 });
 
@@ -142,6 +129,76 @@ app.get('/api/speed-payload', (_req, res) => {
   res.send(payload);
 });
 
+app.get('/api/network-tool/stream', (req, res) => {
+  const tool = String(req.query.tool || '').trim().toLowerCase();
+  const target = normalizeTarget(req.query.target);
+  const infinite = String(req.query.infinite || '').toLowerCase() === 'true';
+  const count = Number(req.query.count || 4);
+  const maxHops = Number(req.query.maxHops || 12);
+
+  if (!['ping', 'tracert'].includes(tool)) {
+    res.status(400).json({ error: 'Debes indicar una herramienta válida: ping o tracert.' });
+    return;
+  }
+
+  if (!target) {
+    res.status(400).json({ error: 'Debes indicar un dominio, IP o URL válida.' });
+    return;
+  }
+
+  const { executable, args } = buildNetworkCommand(tool, target, { infinite, count, maxHops });
+  console.log(`[API] GET /api/network-tool/stream -> ${tool} ${target} ${args.join(' ')}`);
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  let child;
+  try {
+    child = spawn(executable, args, {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    res.write(`[ERROR] No fue posible iniciar ${tool}: ${error.message}\n`);
+    res.end();
+    return;
+  }
+
+  let closed = false;
+  const writeChunk = (chunk) => {
+    if (!closed) {
+      res.write(chunk);
+    }
+  };
+
+  child.stdout.on('data', (chunk) => writeChunk(chunk));
+  child.stderr.on('data', (chunk) => writeChunk(chunk));
+
+  child.on('error', (error) => {
+    writeChunk(`\n[ERROR] ${error.message}\n`);
+    if (!closed) {
+      closed = true;
+      res.end();
+    }
+  });
+
+  child.on('close', (code) => {
+    writeChunk(`\n[Proceso finalizado con código ${code}]\n`);
+    if (!closed) {
+      closed = true;
+      res.end();
+    }
+  });
+
+  req.on('close', () => {
+    closed = true;
+    if (!child.killed) {
+      child.kill();
+    }
+  });
+});
+
 app.get('/api/domain-check', async (req, res) => {
   const domain = String(req.query.domain || '').trim().toLowerCase();
   if (!domain) {
@@ -164,49 +221,6 @@ app.get('/api/domain-check', async (req, res) => {
   }
 
   res.json(output);
-});
-
-app.post('/api/results', async (req, res) => {
-  console.log('[API] POST /api/results');
-  try {
-    const testData = req.body;
-    const savedResult = await saveResult(testData);
-    res.json({ ok: true, result: savedResult });
-  } catch (error) {
-    console.error('[API] Error saving results:', error.message);
-    res.status(500).json({ error: 'Error al guardar resultado', details: error.message });
-  }
-});
-
-app.get('/api/results', async (req, res) => {
-  try {
-    const results = await loadResults();
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener resultados', details: error.message });
-  }
-});
-
-app.delete('/api/results/:id', async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    let results = await loadResults();
-    results = results.filter((r) => r.id !== id);
-    await fs.writeFile(DATA_FILE, JSON.stringify(results, null, 2));
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar resultado', details: error.message });
-  }
-});
-
-app.delete('/api/results', async (req, res) => {
-  try {
-    await ensureDataDir();
-    await fs.writeFile(DATA_FILE, JSON.stringify([], null, 2));
-    res.json({ ok: true, message: 'Todos los resultados han sido eliminados' });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al limpiar resultados', details: error.message });
-  }
 });
 
 app.get('*', (_req, res) => {
