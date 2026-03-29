@@ -65,21 +65,40 @@ function normalizeTarget(input) {
 }
 
 function buildNetworkCommand(tool, target, options = {}) {
-  const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', `${tool}.exe`);
+  const isWin = os.platform() === 'win32';
 
   if (tool === 'ping') {
+    const executable = isWin 
+      ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'ping.exe')
+      : 'ping';
+      
     const count = options.infinite ? null : Math.min(Math.max(Number(options.count) || 4, 1), 999);
-    return {
-      executable,
-      args: count === null ? ['-t', target] : ['-n', String(count), target],
-    };
+    
+    let args = [];
+    if (isWin) {
+      args = count === null ? ['-t', target] : ['-n', String(count), target];
+    } else {
+      args = count === null ? [target] : ['-c', String(count), target];
+    }
+    
+    return { executable, args };
   }
 
+  // Si no es ping, asumimos tracert
+  const executable = isWin 
+    ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tracert.exe')
+    : 'traceroute';
+    
   const maxHops = Math.min(Math.max(Number(options.maxHops) || 12, 1), 30);
-  return {
-    executable,
-    args: ['-d', '-h', String(maxHops), target],
-  };
+  
+  let args = [];
+  if (isWin) {
+    args = ['-d', '-h', String(maxHops), target];
+  } else {
+    args = ['-n', '-m', String(maxHops), target];
+  }
+  
+  return { executable, args };
 }
 
 app.get('/api/config', (_req, res) => {

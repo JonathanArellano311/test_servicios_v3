@@ -1,5 +1,20 @@
 # Historial de Cambios - Test_Servicios IPv6 Pro Tester
 
+## Versión 1.3.1 - 29 de marzo de 2026 (Actualización de Infraestructura)
+**Autor de los cambios:** Enmanuel
+
+### ✨ Mejoras Implementadas
+- **Soporte Multiplataforma** 🐧🪟
+  - El servidor ahora detecta automáticamente si se está ejecutando en Windows o Linux.
+  - Se adaptaron los comandos de red (`ping` y `traceroute`) para usar los parámetros correctos en cada sistema.
+  - Esto permite que la herramienta funcione perfectamente al ser montada en la nube (VPS, Proxmox, Debian/Ubuntu).
+
+### 🔧 Cambios Técnicos
+**Archivos Modificados:**
+- `ipv6-pro-tester/server/index.js` - Refactorización de la función `buildNetworkCommand`.
+
+---
+
 ## Versión 1.3.0 - 24 de marzo de 2026 (Tercer Update)
 
 ### ✨ Mejoras Implementadas
@@ -56,6 +71,7 @@
 - ✅ Botón de tema discreto e intuitivo
 
 ### 📧 Historial de Versiones
+- **v1.3.1** - Soporte Multiplataforma (Autor: Enmanuel)
 - **v1.3.0** - Mejoras UI/UX + Desglose IPv6
 - **v1.2.0** - Tema oscuro/claro + Geolocalización + Exportar
 - **v1.1.0** - Fix función checkDomain
