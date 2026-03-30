@@ -1,17 +1,22 @@
 # Historial de Cambios - Test_Servicios IPv6 Pro Tester
 
-## Versión 1.3.1 - 29 de marzo de 2026 (Actualización de Infraestructura)
-**Autor de los cambios:** Enmanuel
+## Versión 1.3.2 - 29 de marzo de 2026 (Combo Seguridad y Estabilidad)
+**Autor de los cambios:** Enmanuel Cardoza
 
-### ✨ Mejoras Implementadas
-- **Soporte Multiplataforma** 🐧🪟
-  - El servidor ahora detecta automáticamente si se está ejecutando en Windows o Linux.
-  - Se adaptaron los comandos de red (`ping` y `traceroute`) para usar los parámetros correctos en cada sistema.
-  - Esto permite que la herramienta funcione perfectamente al ser montada en la nube (VPS, Proxmox, Debian/Ubuntu).
+###  Mejoras Implementadas
+- **Escudo Rate Limiting** 
+  - Implementación de bloqueos de IP para evitar que saturen el servidor (DoS). Los endpoints pesados están bloqueados a un máximo de 20 pruebas por minuto por usuario.
+- **Prevención de Procesos Zombi** 
+  - Integración de limpieza de memoria (`tree-kill`) para asegurar la muerte absoluta de procesos en segundo plano cuando un visitante abandona el test sin terminar.
+- **Transparencia de Proxy Inverso** 
+  - Configuración nativa para detectar IPs reales saltando barreras de firewalls o balanceadores como Nginx.
+- **Soporte Multiplataforma** 🪟
+  - El servidor ahora adapta la sintaxis de red según el host (Linux/Windows) previniendo caídas críticas en producción.
 
 ### 🔧 Cambios Técnicos
 **Archivos Modificados:**
-- `ipv6-pro-tester/server/index.js` - Refactorización de la función `buildNetworkCommand`.
+- `ipv6-pro-tester/server/index.js` - Inyección de middleware de seguridad y limpieza.
+- `ipv6-pro-tester/package.json` - Instaladas dependencias `express-rate-limit` y `tree-kill`.
 
 ---
 
@@ -71,7 +76,7 @@
 - ✅ Botón de tema discreto e intuitivo
 
 ### 📧 Historial de Versiones
-- **v1.3.1** - Soporte Multiplataforma (Autor: Enmanuel)
+- **v1.3.2** - Seguridad, Optimización y Soporte Linux (Autor: Enmanuel Cardoza)
 - **v1.3.0** - Mejoras UI/UX + Desglose IPv6
 - **v1.2.0** - Tema oscuro/claro + Geolocalización + Exportar
 - **v1.1.0** - Fix función checkDomain

@@ -4,13 +4,27 @@ const path = require('path');
 const net = require('net');
 const dns = require('dns').promises;
 const { spawn } = require('child_process');
+const rateLimit = require('express-rate-limit');
+const kill = require('tree-kill');
 
 const app = express();
+app.set('trust proxy', true); // Confiar en IPs pasadas por Nginx Proxy
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+const heavyLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // Ventana de 1 minuto
+  max: 20, // Máximo 20 peticiones por ventana
+  message: { error: 'Límite de peticiones excedido. Intenta de nuevo en un minuto.' }
+});
+
+// Aplicamos el limitador a las rutas que consumen CPU, Memoria o Tráfico
+app.use('/api/large-payload', heavyLimiter);
+app.use('/api/speed-payload', heavyLimiter);
+app.use('/api/network-tool/stream', heavyLimiter);
 
 function normalizeAddress(address) {
   if (!address) return null;
@@ -219,7 +233,9 @@ app.get('/api/network-tool/stream', (req, res) => {
   req.on('close', () => {
     closed = true;
     if (!child.killed) {
-      child.kill();
+      kill(child.pid, 'SIGKILL', (err) => {
+        if (err) console.error(`[Seguridad] Error destruyendo proceso hijo zombi: ${err}`);
+      });
     }
   });
 });
