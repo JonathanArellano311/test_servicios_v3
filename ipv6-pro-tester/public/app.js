@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   config: null,
   ipInfo: null,
   health: null,
@@ -338,6 +338,8 @@ async function runSpeedTest() {
   try {
     const start = performance.now();
     const response = await fetch(`/api/speed-payload?ts=${Date.now()}`, { cache: 'no-store' });
+    if (response.status === 429) throw new Error('429');
+    
     const blob = await response.blob();
     const elapsedSeconds = (performance.now() - start) / 1000;
     const bits = blob.size * 8;
@@ -348,7 +350,12 @@ async function runSpeedTest() {
     const latency = await measurePingOnce();
     setText('speed-latency', formatMs(latency));
   } catch (_error) {
-    setText('speed-download', 'Error');
+    if (_error.message === '429') {
+      setText('speed-download', 'Espere 1 min');
+      setText('speed-latency', 'Límite');
+    } else {
+      setText('speed-download', 'Error');
+    }
   } finally {
     $('run-local-speed').disabled = false;
   }
@@ -388,7 +395,11 @@ async function runGeneralTest() {
       ? 'Las pruebas internas están activas. Todo lo principal se valida contra tu servidor local y tu red.'
       : 'Este entorno parece publicado o externo. Algunas comprobaciones de IPv6 dependen de conectividad real hacia Internet.');
   } catch (error) {
-    setText('hero-summary', `Ocurrió un error al ejecutar la prueba general: ${error.message}`);
+    if (error.message && error.message.includes('429')) {
+      setText('hero-summary', 'Has superado el límite de pruebas continuas preventivo. Por favor, espera 1 minuto para enfriar el sistema.');
+    } else {
+      setText('hero-summary', `Ocurrió un error al ejecutar la prueba general: ${error.message}`);
+    }
   } finally {
     $('run-main-test').disabled = false;
   }
@@ -418,9 +429,9 @@ function renderManualPingCounters(sent, received) {
 
 function updateManualPingCountersFromOutput(output) {
   const text = String(output || '').toLowerCase();
-  const receivedMatches = text.match(/respuesta desde|reply from/g) || [];
-  const timeoutMatches = text.match(/tiempo de espera agotado|request timed out/g) || [];
-  const unreachableMatches = text.match(/host de destino inaccesible|destination host unreachable|general failure/g) || [];
+  const receivedMatches = text.match(/respuesta desde|reply from|bytes from|bytes desde/g) || [];
+  const timeoutMatches = text.match(/tiempo de espera agotado|request timed out|destination net unreachable|host unreachable/g) || [];
+  const unreachableMatches = text.match(/host de destino inaccesible|destination host unreachable|general failure|100% packet loss/g) || [];
 
   const received = receivedMatches.length;
   const lost = timeoutMatches.length + unreachableMatches.length;
@@ -475,6 +486,7 @@ async function runManualNetworkTool(tool) {
     });
 
     if (!response.ok || !response.body) {
+      if (response.status === 429) throw new Error('429_RATE_LIMIT');
       throw new Error(`Error ${response.status}`);
     }
 
@@ -495,6 +507,8 @@ async function runManualNetworkTool(tool) {
   } catch (error) {
     if (error.name === 'AbortError') {
       output.textContent += '\n\n[Proceso detenido por el usuario]\n';
+    } else if (error.message === '429_RATE_LIMIT' || error.message.includes('429')) {
+      output.textContent += '\n\n🛡️ [Seguridad]: Has excedido tu límite de consultas gratuitas a nuestras herramientas. Por favor relaja el servidor e intenta dentro de 1 minuto.\n';
     } else {
       output.textContent += `\n\nNo fue posible ejecutar ${tool}: ${error.message}\n`;
     }

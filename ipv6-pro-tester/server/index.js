@@ -8,9 +8,12 @@ const rateLimit = require('express-rate-limit');
 const kill = require('tree-kill');
 
 const app = express();
-app.set('trust proxy', true); // Confiar en IPs pasadas por Nginx Proxy
+app.set('trust proxy', 1); // Confiar en 1 nivel de proxy (Nginx)
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+
+// Buffer pre-procesado: Esto evita alocar 5MB de RAM en cada petición concurrente a la prueba de velocidad
+const STATIC_SPEED_BUFFER = Buffer.alloc(5 * 1024 * 1024, 'a');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -92,7 +95,9 @@ function buildNetworkCommand(tool, target, options = {}) {
     if (isWin) {
       args = count === null ? ['-t', target] : ['-n', String(count), target];
     } else {
-      args = count === null ? [target] : ['-c', String(count), target];
+      // -4 fuerza IPv4 en Linux: evita que el kernel prefiera IPv6 cuando el VPS
+      // tiene interfaces IPv6 pero sin routing saliente hacia Internet.
+      args = count === null ? ['-4', target] : ['-4', '-c', String(count), target];
     }
     
     return { executable, args };
@@ -109,7 +114,8 @@ function buildNetworkCommand(tool, target, options = {}) {
   if (isWin) {
     args = ['-d', '-h', String(maxHops), target];
   } else {
-    args = ['-n', '-m', String(maxHops), target];
+    // -4 fuerza IPv4 en traceroute por la misma razón que en ping.
+    args = ['-4', '-n', '-m', String(maxHops), target];
   }
   
   return { executable, args };
@@ -156,16 +162,16 @@ app.get('/api/ping', (_req, res) => {
 app.get('/api/large-payload', (req, res) => {
   const requestedMb = Number(req.query.mb || 2);
   const sizeBytes = Math.min(Math.max(1, requestedMb), 5) * 1024 * 1024;
-  const payload = 'X'.repeat(sizeBytes);
-  res.json({ ok: true, bytes: Buffer.byteLength(payload) });
+  
+  // Ya no generamos strings gigantescos al aire, ahorrando RAM drásticamente
+  res.json({ ok: true, bytes: sizeBytes });
 });
 
 app.get('/api/speed-payload', (_req, res) => {
-  const sizeBytes = 5 * 1024 * 1024;
-  const payload = Buffer.alloc(sizeBytes, 'a');
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
-  res.send(payload);
+  // Servimos estáticamente el mismo payload pre-cargado
+  res.send(STATIC_SPEED_BUFFER);
 });
 
 app.get('/api/network-tool/stream', (req, res) => {
@@ -232,7 +238,7 @@ app.get('/api/network-tool/stream', (req, res) => {
 
   req.on('close', () => {
     closed = true;
-    if (!child.killed) {
+    if (child.exitCode === null && !child.killed) {
       kill(child.pid, 'SIGKILL', (err) => {
         if (err) console.error(`[Seguridad] Error destruyendo proceso hijo zombi: ${err}`);
       });
