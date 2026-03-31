@@ -1,16 +1,32 @@
 const express = require('express');
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const dns = require('dns').promises;
 const { spawn } = require('child_process');
+const rateLimit = require('express-rate-limit');
+const kill = require('tree-kill');
 
 const app = express();
+app.set('trust proxy', 1); // Confiar en 1 nivel de proxy (Nginx)
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-app.set('trust proxy', true);
+// Buffer pre-procesado: Esto evita alocar 5MB de RAM en cada petición concurrente a la prueba de velocidad
+const STATIC_SPEED_BUFFER = Buffer.alloc(5 * 1024 * 1024, 'a');
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+const heavyLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // Ventana de 1 minuto
+  max: 20, // Máximo 20 peticiones por ventana
+  message: { error: 'Límite de peticiones excedido. Intenta de nuevo en un minuto.' }
+});
+
+// Aplicamos el limitador a las rutas que consumen CPU, Memoria o Tráfico
+app.use('/api/large-payload', heavyLimiter);
+app.use('/api/speed-payload', heavyLimiter);
+app.use('/api/network-tool/stream', heavyLimiter);
 
 function normalizeAddress(address) {
   if (!address) return null;
@@ -46,6 +62,11 @@ function normalizeTarget(input) {
   const raw = String(input || '').trim();
   if (!raw || raw.length > 255) return null;
 
+  const ipv6Candidate = raw.replace(/^\[|\]$/g, '');
+  if (net.isIP(ipv6Candidate) === 6) {
+    return ipv6Candidate;
+  }
+
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
 
   try {
@@ -60,21 +81,43 @@ function normalizeTarget(input) {
 }
 
 function buildNetworkCommand(tool, target, options = {}) {
-  const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', `${tool}.exe`);
+  const isWin = os.platform() === 'win32';
 
   if (tool === 'ping') {
+    const executable = isWin 
+      ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'ping.exe')
+      : 'ping';
+      
     const count = options.infinite ? null : Math.min(Math.max(Number(options.count) || 4, 1), 999);
-    return {
-      executable,
-      args: count === null ? ['-t', target] : ['-n', String(count), target],
-    };
+    
+    let args = [];
+    if (isWin) {
+      args = count === null ? ['-t', target] : ['-n', String(count), target];
+    } else {
+      // -4 fuerza IPv4 en Linux: evita que el kernel prefiera IPv6 cuando el VPS
+      // tiene interfaces IPv6 pero sin routing saliente hacia Internet.
+      args = count === null ? ['-4', target] : ['-4', '-c', String(count), target];
+    }
+    
+    return { executable, args };
   }
 
+  // Si no es ping, asumimos tracert
+  const executable = isWin 
+    ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tracert.exe')
+    : 'traceroute';
+    
   const maxHops = Math.min(Math.max(Number(options.maxHops) || 12, 1), 30);
-  return {
-    executable,
-    args: ['-d', '-h', String(maxHops), target],
-  };
+  
+  let args = [];
+  if (isWin) {
+    args = ['-d', '-h', String(maxHops), target];
+  } else {
+    // -4 fuerza IPv4 en traceroute por la misma razón que en ping.
+    args = ['-4', '-n', '-m', String(maxHops), target];
+  }
+  
+  return { executable, args };
 }
 
 app.get('/api/config', (_req, res) => {
@@ -124,16 +167,16 @@ app.get('/api/ping', (_req, res) => {
 app.get('/api/large-payload', (req, res) => {
   const requestedMb = Number(req.query.mb || 2);
   const sizeBytes = Math.min(Math.max(1, requestedMb), 5) * 1024 * 1024;
-  const payload = 'X'.repeat(sizeBytes);
-  res.json({ ok: true, bytes: Buffer.byteLength(payload) });
+  
+  // Ya no generamos strings gigantescos al aire, ahorrando RAM drásticamente
+  res.json({ ok: true, bytes: sizeBytes });
 });
 
 app.get('/api/speed-payload', (_req, res) => {
-  const sizeBytes = 5 * 1024 * 1024;
-  const payload = Buffer.alloc(sizeBytes, 'a');
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
-  res.send(payload);
+  // Servimos estáticamente el mismo payload pre-cargado
+  res.send(STATIC_SPEED_BUFFER);
 });
 
 app.get('/api/network-tool/stream', (req, res) => {
@@ -200,8 +243,10 @@ app.get('/api/network-tool/stream', (req, res) => {
 
   req.on('close', () => {
     closed = true;
-    if (!child.killed) {
-      child.kill();
+    if (child.exitCode === null && !child.killed) {
+      kill(child.pid, 'SIGKILL', (err) => {
+        if (err) console.error(`[Seguridad] Error destruyendo proceso hijo zombi: ${err}`);
+      });
     }
   });
 });
@@ -213,18 +258,29 @@ app.get('/api/domain-check', async (req, res) => {
     return;
   }
 
-  const output = { domain, aRecords: [], aaaaRecords: [], errors: [] };
+  // Códigos que indican «sin registros» (esperado, no son errores reales).
+  const NO_RECORD_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
+
+  const output = { domain, aRecords: [], aaaaRecords: [], warnings: [], errors: [] };
 
   try {
     output.aRecords = await dns.resolve4(domain);
   } catch (error) {
-    output.errors.push(`A: ${error.code || 'sin registros'}`);
+    if (NO_RECORD_CODES.has(error.code)) {
+      output.warnings.push('IPv4 (A): sin registros');
+    } else {
+      output.errors.push(`A: ${error.code || error.message}`);
+    }
   }
 
   try {
     output.aaaaRecords = await dns.resolve6(domain);
   } catch (error) {
-    output.errors.push(`AAAA: ${error.code || 'sin registros'}`);
+    if (NO_RECORD_CODES.has(error.code)) {
+      output.warnings.push('IPv6 (AAAA): sin registros');
+    } else {
+      output.errors.push(`AAAA: ${error.code || error.message}`);
+    }
   }
 
   res.json(output);
