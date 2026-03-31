@@ -531,27 +531,39 @@ async function checkDomain() {
     const result = await fetchJson(`/api/domain-check?domain=${encodeURIComponent(domain)}`);
     const ipv4Count = result.aRecords.length;
     const ipv6Count = result.aaaaRecords.length;
-    const status = ipv4Count && ipv6Count
-      ? 'El dominio está listo para dual stack.'
-      : ipv6Count
-      ? 'El dominio tiene solo registros AAAA.'
-      : ipv4Count
-      ? 'El dominio tiene solo registros A.'
-      : 'No se encontraron registros A ni AAAA.';
 
-    $('domain-result').textContent = [
+    // Estado principal — claro y sin ambigüedad
+    let status;
+    if (ipv4Count && ipv6Count) {
+      status = '✅ Dual Stack activo: el dominio tiene registros IPv4 e IPv6.';
+    } else if (ipv4Count) {
+      status = '🟡 Solo IPv4: el dominio aún no tiene registros AAAA (IPv6).';
+    } else if (ipv6Count) {
+      status = '🔵 Solo IPv6: el dominio no tiene registros A (IPv4).';
+    } else {
+      status = '❌ Sin registros: no se encontraron direcciones IPv4 ni IPv6.';
+    }
+
+    const lines = [
       `Dominio: ${result.domain}`,
       status,
-      `A: ${ipv4Count ? result.aRecords.join(', ') : 'Sin registros'}`,
-      `AAAA: ${ipv6Count ? result.aaaaRecords.join(', ') : 'Sin registros'}`,
-      result.errors.length ? `Notas: ${result.errors.join(' | ')}` : 'Sin observaciones.'
-    ].join('\n');
+      `IPv4 (A):    ${ipv4Count ? result.aRecords.join(', ') : 'Sin registros'}`,
+      `IPv6 (AAAA): ${ipv6Count ? result.aaaaRecords.join(', ') : 'Sin registros'}`,
+    ];
+
+    // Solo mostramos errores reales (no el "sin registros" esperado)
+    if (result.errors && result.errors.length) {
+      lines.push(`⚠️ Errores DNS: ${result.errors.join(' | ')}`);
+    }
+
+    $('domain-result').textContent = lines.join('\n');
   } catch (error) {
     $('domain-result').textContent = `No fue posible revisar el dominio: ${error.message}`;
   } finally {
     $('check-domain').disabled = false;
   }
 }
+
 
 async function loadGeolocation() {
   if (state.environment.isInternal) {

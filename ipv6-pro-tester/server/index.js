@@ -253,18 +253,29 @@ app.get('/api/domain-check', async (req, res) => {
     return;
   }
 
-  const output = { domain, aRecords: [], aaaaRecords: [], errors: [] };
+  // Códigos que indican «sin registros» (esperado, no son errores reales).
+  const NO_RECORD_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
+
+  const output = { domain, aRecords: [], aaaaRecords: [], warnings: [], errors: [] };
 
   try {
     output.aRecords = await dns.resolve4(domain);
   } catch (error) {
-    output.errors.push(`A: ${error.code || 'sin registros'}`);
+    if (NO_RECORD_CODES.has(error.code)) {
+      output.warnings.push('IPv4 (A): sin registros');
+    } else {
+      output.errors.push(`A: ${error.code || error.message}`);
+    }
   }
 
   try {
     output.aaaaRecords = await dns.resolve6(domain);
   } catch (error) {
-    output.errors.push(`AAAA: ${error.code || 'sin registros'}`);
+    if (NO_RECORD_CODES.has(error.code)) {
+      output.warnings.push('IPv6 (AAAA): sin registros');
+    } else {
+      output.errors.push(`AAAA: ${error.code || error.message}`);
+    }
   }
 
   res.json(output);
