@@ -2,6 +2,12 @@ const state = {
   config: null,
   ipInfo: null,
   health: null,
+  clientNetwork: {
+    publicIPv4: null,
+    publicIPv6: null,
+    localIPv4: null,
+    localIPv6: null,
+  },
   scores: { ipv4: 0, ipv6: 0, readiness: 0 },
   packetRun: { active: false, stopRequested: false },
   manualNetwork: { controller: null, running: false },
@@ -31,6 +37,72 @@ function isPrivateIpv4(value) {
     || value.startsWith('127.')
     || value.startsWith('192.168.')
     || /^172\.(1[6-9]|2\d|3[0-1])\./.test(value);
+}
+
+function isPrivateIpv6(value) {
+  if (!value || !value.includes(':')) return false;
+  const normalized = value.toLowerCase();
+  return normalized === '::1'
+    || normalized.startsWith('fc')
+    || normalized.startsWith('fd')
+    || normalized.startsWith('fe80:');
+}
+
+function classifyClientNetwork() {
+  const observedIp = state.ipInfo?.ip || '';
+  state.clientNetwork.publicIPv4 = observedIp && !observedIp.includes(':') ? observedIp : null;
+  state.clientNetwork.publicIPv6 = observedIp && observedIp.includes(':') ? observedIp : null;
+}
+
+async function detectLocalIps() {
+  if (!window.RTCPeerConnection) return;
+
+  return new Promise((resolve) => {
+    const found = { ipv4: new Set(), ipv6: new Set() };
+    const connection = new RTCPeerConnection({ iceServers: [] });
+    let finished = false;
+
+    function remember(candidateText) {
+      const matches = candidateText.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})|(([a-f0-9]{1,4}:){1,7}[a-f0-9]{1,4})/gi) || [];
+      matches.forEach((value) => {
+        const candidate = value.trim();
+        if (!candidate || candidate === '0.0.0.0') return;
+        if (candidate.includes(':')) {
+          if (isPrivateIpv6(candidate)) found.ipv6.add(candidate);
+          return;
+        }
+        if (isPrivateIpv4(candidate)) found.ipv4.add(candidate);
+      });
+    }
+
+    function finish() {
+      if (finished) return;
+      finished = true;
+      try {
+        connection.close();
+      } catch (_error) {
+        // Ignore close errors from partial WebRTC setup.
+      }
+
+      state.clientNetwork.localIPv4 = [...found.ipv4][0] || null;
+      state.clientNetwork.localIPv6 = [...found.ipv6][0] || null;
+      resolve();
+    }
+
+    window.setTimeout(finish, 2000);
+    connection.createDataChannel('fibertech-ip-check');
+    connection.onicecandidate = (event) => {
+      if (event.candidate?.candidate) {
+        remember(event.candidate.candidate);
+        return;
+      }
+      finish();
+    };
+
+    connection.createOffer()
+      .then((offer) => connection.setLocalDescription(offer))
+      .catch(() => finish());
+  });
 }
 
 function detectInternalEnvironment() {
@@ -145,6 +217,8 @@ async function loadBaseData() {
   state.config = config;
   state.ipInfo = ipInfo;
   state.health = health;
+  classifyClientNetwork();
+  await detectLocalIps();
 }
 
 function updateScores() {
@@ -198,6 +272,7 @@ function updateScores() {
 function updateTestResults() {
   const family = state.ipInfo?.family || 'Desconocido';
   const ip = state.ipInfo?.ip || 'No detectada';
+  const localIPv4 = state.clientNetwork.localIPv4 || 'No detectada';
   const serverAddresses = state.health?.serverAddresses || [];
   const hasIPv6 = serverAddresses.some((item) => String(item.address).includes(':'));
   const hasIPv4 = serverAddresses.some((item) => String(item.address).includes('.'));
@@ -206,7 +281,7 @@ function updateTestResults() {
   state.tests[0] = {
     ...state.tests[0],
     status: family === 'IPv6' || family === 'IPv4' ? 'ok' : 'warn',
-    details: `La sesión llega como ${family}. IP detectada: ${ip}.`
+    details: `La sesión del cliente llega como ${family}. IP pública detectada: ${ip}. IPv4 local detectada: ${localIPv4}.`
   };
 
   state.tests[1] = {
@@ -241,16 +316,13 @@ function updateTestResults() {
 }
 
 function updateOverview(latency = 0, largePayload = null) {
-  const addresses = state.health?.serverAddresses || [];
-  const primaryIPv6 = addresses.find((item) => String(item.address).includes(':'))?.address || 'No detectada';
-  const primaryIPv4 = addresses.find((item) => String(item.address).includes('.'))?.address || 'No detectada';
-
   renderStats([
-    { label: 'IP detectada', value: state.ipInfo?.ip || 'No disponible' },
+    { label: 'IPv4 pública del cliente', value: state.clientNetwork.publicIPv4 || 'No detectada en esta sesión' },
+    { label: 'IPv6 pública del cliente', value: state.clientNetwork.publicIPv6 || 'No detectada en esta sesión' },
+    { label: 'IPv4 local del cliente', value: state.clientNetwork.localIPv4 || 'No disponible en este navegador' },
+    { label: 'IPv6 local del cliente', value: state.clientNetwork.localIPv6 || 'No disponible en este navegador' },
     { label: 'Protocolo observado', value: state.ipInfo?.family || 'Desconocido' },
     { label: 'Latencia base', value: formatMs(latency) },
-    { label: 'IPv4 del servidor', value: primaryIPv4 },
-    { label: 'IPv6 del servidor', value: primaryIPv6 },
     { label: 'Paquete grande', value: largePayload ? `${(largePayload.bytes / (1024 * 1024)).toFixed(1)} MB` : 'Pendiente' },
   ]);
 }
@@ -378,9 +450,9 @@ async function runGeneralTest() {
     const summary = state.environment.isInternal
       ? 'Modo interno detectado: puedes ejecutar tus pruebas dentro de esta red y validar backend, latencia, paquetes, ping, tracert y DNS sin publicar el sitio.'
       : family === 'IPv6'
-      ? 'La sesión actual entra por IPv6 y el entorno muestra una preparación sólida para este protocolo.'
+      ? 'La sesión actual del cliente entra por IPv6, así que IPv6 está activa y funcionando en esta prueba.'
       : family === 'IPv4'
-      ? 'La sesión actual entra por IPv4. El sitio puede seguir mejorando su exposición y preferencia IPv6.'
+      ? 'La sesión actual del cliente entra por IPv4. Si esperabas IPv6, este usuario todavía no está navegando por IPv6 en esta prueba.'
       : 'No se pudo determinar el protocolo principal de la sesión actual.';
 
     setText('hero-summary', summary);
@@ -560,6 +632,7 @@ function exportReport() {
   const reportData = {
     timestamp: new Date().toISOString(),
     ipInfo: state.ipInfo,
+    clientNetwork: state.clientNetwork,
     scores: state.scores,
     tests: state.tests,
   };
@@ -569,7 +642,10 @@ function exportReport() {
     ['Fecha', new Date(reportData.timestamp).toLocaleString()],
     [''],
     ['=== RESULTADOS ===', ''],
-    ['IP Detectada', reportData.ipInfo?.ip || '-'],
+    ['IPv4 Pública Cliente', reportData.clientNetwork?.publicIPv4 || '-'],
+    ['IPv6 Pública Cliente', reportData.clientNetwork?.publicIPv6 || '-'],
+    ['IPv4 Local Cliente', reportData.clientNetwork?.localIPv4 || '-'],
+    ['IPv6 Local Cliente', reportData.clientNetwork?.localIPv6 || '-'],
     ['Protocolo', reportData.ipInfo?.family || '-'],
     [''],
     ['=== PUNTUACIONES ===', ''],
@@ -628,11 +704,12 @@ async function init() {
   loadTheme();
   renderTests();
   renderStats([
-    { label: 'IP detectada', value: 'Pendiente' },
+    { label: 'IPv4 pública del cliente', value: 'Pendiente' },
+    { label: 'IPv6 pública del cliente', value: 'Pendiente' },
+    { label: 'IPv4 local del cliente', value: 'Pendiente' },
+    { label: 'IPv6 local del cliente', value: 'Pendiente' },
     { label: 'Protocolo observado', value: 'Pendiente' },
     { label: 'Latencia base', value: 'Pendiente' },
-    { label: 'IPv4 del servidor', value: 'Pendiente' },
-    { label: 'IPv6 del servidor', value: 'Pendiente' },
     { label: 'Paquete grande', value: 'Pendiente' },
   ]);
   renderPacketStats(0, 0, 20, 0);

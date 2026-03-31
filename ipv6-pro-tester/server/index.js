@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+app.set('trust proxy', true);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -87,12 +88,18 @@ app.get('/api/config', (_req, res) => {
 });
 
 app.get('/api/ip', (req, res) => {
-  const forwarded = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  const candidate = normalizeAddress(forwarded || req.socket.remoteAddress || '');
+  const forwardedChain = String(req.headers['x-forwarded-for'] || '')
+    .split(',')
+    .map((item) => normalizeAddress(item.trim()))
+    .filter(Boolean);
+  const socketAddress = normalizeAddress(req.socket.remoteAddress || '');
+  const candidate = normalizeAddress(req.ip || forwardedChain[0] || socketAddress || '');
   console.log('[API] GET /api/ip ->', candidate);
   res.json({
     ip: candidate,
     family: inferFamily(candidate),
+    forwardedFor: forwardedChain,
+    remoteAddress: socketAddress,
     userAgent: req.headers['user-agent'] || '',
     host: req.headers.host,
     protocol: req.protocol,
