@@ -7,6 +7,8 @@ const state = {
     publicIPv6: null,
     localIPv4: null,
     localIPv6: null,
+    portalIPv4: null,
+    portalIPv6: null,
   },
   scores: { ipv4: 0, ipv6: 0, readiness: 0 },
   packetRun: { active: false, stopRequested: false },
@@ -50,8 +52,32 @@ function isPrivateIpv6(value) {
 
 function classifyClientNetwork() {
   const observedIp = state.ipInfo?.ip || '';
-  state.clientNetwork.publicIPv4 = observedIp && !observedIp.includes(':') ? observedIp : null;
-  state.clientNetwork.publicIPv6 = observedIp && observedIp.includes(':') ? observedIp : null;
+  state.clientNetwork.portalIPv4 = observedIp && !observedIp.includes(':') ? observedIp : null;
+  state.clientNetwork.portalIPv6 = observedIp && observedIp.includes(':') ? observedIp : null;
+  state.clientNetwork.publicIPv4 = state.clientNetwork.portalIPv4;
+  state.clientNetwork.publicIPv6 = state.clientNetwork.portalIPv6;
+}
+
+async function detectPublicInternetIps() {
+  if (state.environment.isInternal) return;
+
+  const probes = [
+    { family: 'publicIPv4', url: 'https://api4.ipify.org?format=json' },
+    { family: 'publicIPv6', url: 'https://api6.ipify.org?format=json' },
+  ];
+
+  await Promise.all(probes.map(async ({ family, url }) => {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data?.ip) {
+        state.clientNetwork[family] = data.ip;
+      }
+    } catch (_error) {
+      // If one family is unavailable from the browser path, keep the previous value.
+    }
+  }));
 }
 
 async function detectLocalIps() {
@@ -218,6 +244,8 @@ async function loadBaseData() {
   state.ipInfo = ipInfo;
   state.health = health;
   classifyClientNetwork();
+  detectInternalEnvironment();
+  await detectPublicInternetIps();
   await detectLocalIps();
 }
 
@@ -228,15 +256,17 @@ function updateScores() {
   const hasServerIPv6 = (state.health?.serverAddresses || []).some((item) => String(item.family).includes('6') || String(item.address).includes(':'));
   const hasServerIPv4 = (state.health?.serverAddresses || []).some((item) => String(item.family).includes('4') || String(item.address).includes('.'));
   const internalMode = state.environment.isInternal;
+  const hasClientIPv4 = Boolean(state.clientNetwork.publicIPv4 || state.clientNetwork.portalIPv4);
+  const hasClientIPv6 = Boolean(state.clientNetwork.publicIPv6 || state.clientNetwork.portalIPv6);
 
   if (hasServerIPv4) ipv4 += 4;
-  if (family === 'IPv4') ipv4 += 6;
-  else if (family === 'IPv6') ipv4 += 4;
-  else ipv4 += 2;
+  if (hasClientIPv4) ipv4 += 6;
+  else if (family === 'IPv6') ipv4 += 2;
+  else ipv4 += 1;
 
   if (hasServerIPv6) ipv6 += 4;
-  if (family === 'IPv6') ipv6 += 6;
-  else if (family === 'IPv4') ipv6 += internalMode ? 5 : 2;
+  if (hasClientIPv6) ipv6 += 6;
+  else if (family === 'IPv4') ipv6 += internalMode ? 5 : 1;
   else ipv6 += internalMode ? 4 : 1;
 
   state.scores.ipv4 = Math.min(10, ipv4);
@@ -255,7 +285,7 @@ function updateScores() {
 
   const checks = {
     'check-ipv6-server': hasServerIPv6 ? '✓' : (internalMode ? 'Local' : '✗'),
-    'check-ipv6-conn': family === 'IPv6' ? '✓' : (internalMode ? 'Local' : '✗'),
+    'check-ipv6-conn': hasClientIPv6 ? '✓' : (internalMode ? 'Local' : '✗'),
     'check-dual-stack': (hasServerIPv6 && hasServerIPv4) ? '✓' : (internalMode ? 'Local' : '✗'),
     'check-ipv6-latency': 'Pendiente'
   };
@@ -273,15 +303,17 @@ function updateTestResults() {
   const family = state.ipInfo?.family || 'Desconocido';
   const ip = state.ipInfo?.ip || 'No detectada';
   const localIPv4 = state.clientNetwork.localIPv4 || 'No detectada';
+  const publicIPv6 = state.clientNetwork.publicIPv6 || 'No detectada';
   const serverAddresses = state.health?.serverAddresses || [];
   const hasIPv6 = serverAddresses.some((item) => String(item.address).includes(':'));
   const hasIPv4 = serverAddresses.some((item) => String(item.address).includes('.'));
   const internalMode = state.environment.isInternal;
+  const portalFamilyLabel = family === 'Desconocido' ? 'No detectado' : family;
 
   state.tests[0] = {
     ...state.tests[0],
-    status: family === 'IPv6' || family === 'IPv4' ? 'ok' : 'warn',
-    details: `La sesión del cliente llega como ${family}. IP pública detectada: ${ip}. IPv4 local detectada: ${localIPv4}.`
+    status: state.clientNetwork.publicIPv6 || state.clientNetwork.publicIPv4 ? 'ok' : 'warn',
+    details: `Ruta al portal: ${portalFamilyLabel} (${ip}). IPv6 pública del cliente: ${publicIPv6}. IPv4 local detectada: ${localIPv4}.`
   };
 
   state.tests[1] = {
@@ -319,9 +351,9 @@ function updateOverview(latency = 0, largePayload = null) {
   renderStats([
     { label: 'IPv4 pública del cliente', value: state.clientNetwork.publicIPv4 || 'No detectada en esta sesión' },
     { label: 'IPv6 pública del cliente', value: state.clientNetwork.publicIPv6 || 'No detectada en esta sesión' },
+    { label: 'Ruta actual al portal', value: state.ipInfo?.family || 'Desconocido' },
     { label: 'IPv4 local del cliente', value: state.clientNetwork.localIPv4 || 'No disponible en este navegador' },
     { label: 'IPv6 local del cliente', value: state.clientNetwork.localIPv6 || 'No disponible en este navegador' },
-    { label: 'Protocolo observado', value: state.ipInfo?.family || 'Desconocido' },
     { label: 'Latencia base', value: formatMs(latency) },
     { label: 'Paquete grande', value: largePayload ? `${(largePayload.bytes / (1024 * 1024)).toFixed(1)} MB` : 'Pendiente' },
   ]);
@@ -454,12 +486,15 @@ async function runGeneralTest() {
     renderTests();
 
     const family = state.ipInfo?.family || 'Desconocido';
+    const hasClientIPv6 = Boolean(state.clientNetwork.publicIPv6);
     const summary = state.environment.isInternal
       ? 'Modo interno detectado: puedes ejecutar tus pruebas dentro de esta red y validar backend, latencia, paquetes, ping, tracert y DNS sin publicar el sitio.'
+      : hasClientIPv6 && family === 'IPv4'
+      ? `El cliente sí tiene IPv6 activa (${state.clientNetwork.publicIPv6}), pero esta visita al portal llegó por IPv4.`
       : family === 'IPv6'
-      ? 'La sesión actual del cliente entra por IPv6, así que IPv6 está activa y funcionando en esta prueba.'
+      ? `La sesión actual del cliente entra por IPv6 y está activa (${state.clientNetwork.publicIPv6 || state.ipInfo?.ip || 'detectada'}).`
       : family === 'IPv4'
-      ? 'La sesión actual del cliente entra por IPv4. Si esperabas IPv6, este usuario todavía no está navegando por IPv6 en esta prueba.'
+      ? 'La sesión actual del cliente entra por IPv4 y no se pudo confirmar salida pública por IPv6 en esta prueba.'
       : 'No se pudo determinar el protocolo principal de la sesión actual.';
 
     setText('hero-summary', summary);
@@ -677,9 +712,9 @@ function exportReport() {
     ['=== RESULTADOS ===', ''],
     ['IPv4 Pública Cliente', reportData.clientNetwork?.publicIPv4 || '-'],
     ['IPv6 Pública Cliente', reportData.clientNetwork?.publicIPv6 || '-'],
+    ['Ruta Actual al Portal', reportData.ipInfo?.family || '-'],
     ['IPv4 Local Cliente', reportData.clientNetwork?.localIPv4 || '-'],
     ['IPv6 Local Cliente', reportData.clientNetwork?.localIPv6 || '-'],
-    ['Protocolo', reportData.ipInfo?.family || '-'],
     [''],
     ['=== PUNTUACIONES ===', ''],
     ['IPv4', `${reportData.scores.ipv4}/10`],
@@ -737,9 +772,9 @@ async function init() {
   renderStats([
     { label: 'IPv4 pública del cliente', value: 'Pendiente' },
     { label: 'IPv6 pública del cliente', value: 'Pendiente' },
+    { label: 'Ruta actual al portal', value: 'Pendiente' },
     { label: 'IPv4 local del cliente', value: 'Pendiente' },
     { label: 'IPv6 local del cliente', value: 'Pendiente' },
-    { label: 'Protocolo observado', value: 'Pendiente' },
     { label: 'Latencia base', value: 'Pendiente' },
     { label: 'Paquete grande', value: 'Pendiente' },
   ]);
