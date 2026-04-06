@@ -47,6 +47,7 @@ const heavyLimiter = rateLimit({
 // Aplicamos el limitador a las rutas que consumen CPU, Memoria o Tráfico
 app.use('/api/large-payload', heavyLimiter);
 app.use('/api/speed-payload', heavyLimiter);
+app.use('/api/speed-upload', heavyLimiter);
 app.use('/api/network-tool/stream', heavyLimiter);
 
 function normalizeAddress(address) {
@@ -257,6 +258,31 @@ app.get('/api/speed-payload', (_req, res) => {
   res.send(STATIC_SPEED_BUFFER);
 });
 
+app.post('/api/speed-upload', (req, res) => {
+  let bytes = 0;
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+  let rejected = false;
+
+  req.on('data', (chunk) => {
+    bytes += chunk.length;
+    if (bytes > MAX_UPLOAD_BYTES && !rejected) {
+      rejected = true;
+      res.status(413).json({ error: 'Payload demasiado grande (maximo 5 MB).' });
+      req.destroy();
+    }
+  });
+
+  req.on('end', () => {
+    if (rejected) return;
+    res.json({ ok: true, bytes });
+  });
+
+  req.on('error', () => {
+    if (!res.headersSent) {
+      res.status(400).json({ error: 'No fue posible procesar la subida.' });
+    }
+  });
+});
 app.get('/api/network-tool/stream', (req, res) => {
   const tool = String(req.query.tool || '').trim().toLowerCase();
   const target = normalizeTarget(req.query.target);
@@ -406,4 +432,5 @@ app.get('*', (_req, res) => {
 app.listen(PORT, HOST, () => {
   console.log(`Test_Servicios running on http://${HOST}:${PORT}`);
 });
+
 

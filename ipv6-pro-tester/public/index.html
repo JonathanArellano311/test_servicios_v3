@@ -148,6 +148,13 @@
         </div>
         <div class="inline-controls">
           <label>
+            <span>Modo</span>
+            <select id="packet-mode">
+              <option value="local" selected>Local (cliente ↔ portal)</option>
+              <option value="remote">Remoto (servidor ↔ destino)</option>
+            </select>
+          </label>
+          <label>
             <span>Solicitudes</span>
             <input type="number" id="packet-count" min="1" step="1" value="20" />
           </label>
@@ -155,9 +162,13 @@
             <span>Intervalo (ms)</span>
             <input type="number" id="packet-interval" min="50" step="50" value="250" />
           </label>
+          <label id="packet-target-wrap" style="display:none; min-width: 280px;">
+            <span>Destino remoto</span>
+            <input type="text" id="packet-target" placeholder="1.1.1.1 o google.com" />
+          </label>
         </div>
       </div>
-      <p class="section-copy">Esta prueba utiliza solicitudes HTTP repetidas al servidor para estimar pérdida, latencia y jitter. También puedes dejarla corriendo en modo continuo y detenerla cuando quieras.</p>
+      <p class="section-copy">Modo Local: mide pérdida cliente ↔ portal con HTTP repetido. Modo Remoto: ejecuta ping del servidor hacia un destino para validar pérdida en ruta externa.</p>
       <div class="button-row">
         <button class="button button-primary" id="start-packet-test">Iniciar prueba</button>
         <button class="button button-secondary" id="start-continuous-test">Modo continuo</button>
@@ -215,6 +226,7 @@
       </div>
       <div class="speed-box">
         <div><span>Descarga estimada</span><strong id="speed-download">0.00 Mbps</strong></div>
+        <div><span>Subida estimada</span><strong id="speed-upload">0.00 Mbps</strong></div>
         <div><span>Latencia</span><strong id="speed-latency">0 ms</strong></div>
         <div><span>Tamaño de prueba</span><strong id="speed-size">0 MB</strong></div>
       </div>

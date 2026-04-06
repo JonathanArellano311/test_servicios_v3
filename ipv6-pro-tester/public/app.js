@@ -11,7 +11,7 @@ const state = {
     portalIPv6: null,
   },
   scores: { ipv4: 0, ipv6: 0, readiness: 0 },
-  packetRun: { active: false, stopRequested: false },
+  packetRun: { active: false, stopRequested: false, controller: null },
   manualNetwork: { controller: null, running: false },
   environment: { isInternal: false, reason: '' },
   tests: [
@@ -378,9 +378,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runPacketTest({ count, interval, continuous }) {
+async function runPacketTestLocal({ count, interval, continuous }) {
   state.packetRun.active = true;
   state.packetRun.stopRequested = false;
+  state.packetRun.controller = null;
   $('start-packet-test').disabled = true;
   $('start-continuous-test').disabled = true;
   $('stop-packet-test').disabled = false;
@@ -427,6 +428,7 @@ async function runPacketTest({ count, interval, continuous }) {
   $('start-packet-test').disabled = false;
   $('start-continuous-test').disabled = false;
   $('stop-packet-test').disabled = true;
+  setPacketModeUi();
 
   const finalLoss = sent ? ((sent - received) / sent) * 100 : 0;
   $('packet-log').textContent = [
@@ -437,28 +439,169 @@ async function runPacketTest({ count, interval, continuous }) {
   ].join('\n');
 }
 
+function parsePingSummary(output) {
+  const text = String(output || '');
+
+  let sent = 0;
+  let received = 0;
+  let lossPercent = null;
+  let avgLatencyMs = null;
+
+  const winPackets = text.match(/(?:Paquetes|Packets)[^=]*=\s*(\d+)[^=]*=\s*(\d+)[^=]*=\s*(\d+)\s*\((\d+)\s*%/i);
+  if (winPackets) {
+    sent = Number(winPackets[1]);
+    received = Number(winPackets[2]);
+    lossPercent = Number(winPackets[4]);
+  }
+
+  const linuxPackets = text.match(/(\d+)\s+packets transmitted,\s+(\d+)\s+(?:packets )?received,\s+(\d+(?:\.\d+)?)%\s+packet loss/i);
+  if (!winPackets && linuxPackets) {
+    sent = Number(linuxPackets[1]);
+    received = Number(linuxPackets[2]);
+    lossPercent = Number(linuxPackets[3]);
+  }
+
+  const winAvg = text.match(/(?:Average|Media)\s*=\s*(\d+)\s*ms/i);
+  if (winAvg) avgLatencyMs = Number(winAvg[1]);
+
+  const linuxAvg = text.match(/=\s*([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)\s*ms/i);
+  if (!winAvg && linuxAvg) avgLatencyMs = Number(linuxAvg[2]);
+
+  if (!sent && !received) {
+    const responses = text.match(/respuesta desde|reply from|bytes from|bytes desde/gi) || [];
+    const timeouts = text.match(/tiempo de espera agotado|request timed out|destination net unreachable|host unreachable/gi) || [];
+    received = responses.length;
+    sent = responses.length + timeouts.length;
+    if (sent > 0) lossPercent = Number((((sent - received) / sent) * 100).toFixed(2));
+  }
+
+  return { sent, received, lossPercent, avgLatencyMs };
+}
+
+async function runPacketTestRemote({ count, target }) {
+  state.packetRun.active = true;
+  state.packetRun.stopRequested = false;
+  const controller = new AbortController();
+  state.packetRun.controller = controller;
+  $('start-packet-test').disabled = true;
+  $('start-continuous-test').disabled = true;
+  $('stop-packet-test').disabled = false;
+  $('packet-log').textContent = `Ejecutando prueba remota hacia ${target}...`;
+
+  const startedAt = performance.now();
+
+  try {
+    const query = new URLSearchParams({
+      tool: 'ping',
+      target,
+      count: String(count),
+      infinite: 'false',
+    });
+    const response = await fetch(`/api/network-tool/stream?${query.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) throw new Error('429');
+      throw new Error(`Error ${response.status}`);
+    }
+
+    const output = await response.text();
+    const summary = parsePingSummary(output);
+    const elapsed = (performance.now() - startedAt) / 1000;
+    const sent = summary.sent || count;
+    const received = summary.received || 0;
+    const loss = summary.lossPercent !== null
+      ? Number(summary.lossPercent)
+      : (sent > 0 ? ((sent - received) / sent) * 100 : 0);
+
+    renderPacketStats(sent, received, sent, elapsed);
+    $('packet-log').textContent = [
+      `Prueba remota completada: ${target}`,
+      `Enviados: ${sent}`,
+      `Recibidos: ${received}`,
+      `Perdida: ${loss.toFixed(2)} %`,
+      `Latencia promedio: ${summary.avgLatencyMs !== null ? formatMs(summary.avgLatencyMs) : 'No disponible'}`,
+      '',
+      'Salida del ping:',
+      output.trim() || '(sin salida)'
+    ].join('\n');
+  } catch (error) {
+    if (error.name === 'AbortError' || state.packetRun.stopRequested) {
+      $('packet-log').textContent += '\n\n[Prueba remota detenida por el usuario]';
+    } else if (error.message === '429' || String(error.message).includes('429')) {
+      $('packet-log').textContent = 'Limite de consultas alcanzado. Espera 1 minuto e intenta de nuevo.';
+    } else {
+      $('packet-log').textContent = `No fue posible ejecutar la prueba remota: ${error.message}`;
+    }
+  } finally {
+    state.packetRun.active = false;
+    state.packetRun.controller = null;
+    $('start-packet-test').disabled = false;
+    $('start-continuous-test').disabled = false;
+    $('stop-packet-test').disabled = true;
+    setPacketModeUi();
+  }
+}
+
+async function runPacketTest({ count, interval, continuous }) {
+  const mode = $('packet-mode')?.value || 'local';
+  if (mode === 'remote') {
+    if (continuous) {
+      $('packet-log').textContent = 'El modo continuo aplica solo para prueba local.';
+      return;
+    }
+    const target = $('packet-target')?.value?.trim();
+    if (!target) {
+      $('packet-log').textContent = 'Escribe un destino remoto (IP o dominio) para medir perdida externa.';
+      return;
+    }
+    await runPacketTestRemote({ count, target });
+    return;
+  }
+  await runPacketTestLocal({ count, interval, continuous });
+}
+
 async function runSpeedTest() {
   $('run-local-speed').disabled = true;
   try {
-    const start = performance.now();
+    const downloadStart = performance.now();
     const response = await fetch(`/api/speed-payload?ts=${Date.now()}`, { cache: 'no-store' });
     if (response.status === 429) throw new Error('429');
     
     const blob = await response.blob();
-    const elapsedSeconds = (performance.now() - start) / 1000;
-    const bits = blob.size * 8;
-    const mbps = elapsedSeconds > 0 ? bits / elapsedSeconds / 1_000_000 : 0;
-    setText('speed-download', `${mbps.toFixed(2)} Mbps`);
+    const downloadSeconds = (performance.now() - downloadStart) / 1000;
+    const downloadBits = blob.size * 8;
+    const downloadMbps = downloadSeconds > 0 ? downloadBits / downloadSeconds / 1_000_000 : 0;
+    setText('speed-download', `${downloadMbps.toFixed(2)} Mbps`);
     setText('speed-size', `${(blob.size / (1024 * 1024)).toFixed(1)} MB`);
+
+    const uploadPayload = new Blob([new Uint8Array(2 * 1024 * 1024)], { type: 'application/octet-stream' });
+    const uploadStart = performance.now();
+    const uploadResponse = await fetch(`/api/speed-upload?ts=${Date.now()}`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: uploadPayload,
+    });
+    if (uploadResponse.status === 429) throw new Error('429');
+    if (!uploadResponse.ok) throw new Error(`UPLOAD_${uploadResponse.status}`);
+    const uploadSeconds = (performance.now() - uploadStart) / 1000;
+    const uploadBits = uploadPayload.size * 8;
+    const uploadMbps = uploadSeconds > 0 ? uploadBits / uploadSeconds / 1_000_000 : 0;
+    setText('speed-upload', `${uploadMbps.toFixed(2)} Mbps`);
 
     const latency = await measurePingOnce();
     setText('speed-latency', formatMs(latency));
   } catch (_error) {
     if (_error.message === '429') {
       setText('speed-download', 'Espere 1 min');
+      setText('speed-upload', 'Espere 1 min');
       setText('speed-latency', 'Límite');
     } else {
       setText('speed-download', 'Error');
+      setText('speed-upload', 'Error');
     }
   } finally {
     $('run-local-speed').disabled = false;
@@ -751,6 +894,13 @@ function exportReport() {
   URL.revokeObjectURL(url);
 }
 
+function setPacketModeUi() {
+  const mode = $('packet-mode')?.value || 'local';
+  const wrap = $('packet-target-wrap');
+  if (wrap) wrap.style.display = mode === 'remote' ? 'block' : 'none';
+  $('start-continuous-test').disabled = mode === 'remote' || state.packetRun.active;
+}
+
 function wireEvents() {
   $('run-main-test').addEventListener('click', runGeneralTest);
   $('run-local-speed').addEventListener('click', runSpeedTest);
@@ -765,8 +915,16 @@ function wireEvents() {
   $('manual-ping-infinite').addEventListener('change', (event) => {
     $('manual-ping-count').disabled = event.target.checked;
   });
+  $('packet-mode').addEventListener('change', () => {
+    setPacketModeUi();
+  });
   $('export-report').addEventListener('click', exportReport);
-  $('stop-packet-test').addEventListener('click', () => { state.packetRun.stopRequested = true; });
+  $('stop-packet-test').addEventListener('click', () => {
+    state.packetRun.stopRequested = true;
+    if (state.packetRun.controller) {
+      state.packetRun.controller.abort();
+    }
+  });
 
   $('start-packet-test').addEventListener('click', async () => {
     const count = Math.max(1, Number($('packet-count').value || 20));
@@ -796,6 +954,7 @@ async function init() {
   setManualNetworkButtons(false);
   $('manual-ping-count').disabled = $('manual-ping-infinite').checked;
   wireEvents();
+  setPacketModeUi();
   await runGeneralTest();
   await loadGeolocation();
 }
