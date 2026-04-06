@@ -365,77 +365,6 @@ async function measurePingOnce() {
   return performance.now() - start;
 }
 
-function calculateJitter(values) {
-  if (values.length < 2) return 0;
-  let total = 0;
-  for (let i = 1; i < values.length; i += 1) {
-    total += Math.abs(values[i] - values[i - 1]);
-  }
-  return total / (values.length - 1);
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function runPacketTestLocal({ count, interval, continuous }) {
-  state.packetRun.active = true;
-  state.packetRun.stopRequested = false;
-  state.packetRun.controller = null;
-  $('start-packet-test').disabled = true;
-  $('stop-packet-test').disabled = false;
-
-  let sent = 0;
-  let received = 0;
-  let failures = 0;
-  const latencies = [];
-  const startedAt = performance.now();
-
-  while (!state.packetRun.stopRequested && (continuous || sent < count)) {
-    sent += 1;
-    try {
-      const latency = await measurePingOnce();
-      received += 1;
-      latencies.push(latency);
-    } catch (_error) {
-      failures += 1;
-    }
-
-    const jitter = calculateJitter(latencies);
-    const min = latencies.length ? Math.min(...latencies) : 0;
-    const max = latencies.length ? Math.max(...latencies) : 0;
-    const loss = sent ? ((sent - received) / sent) * 100 : 0;
-    const elapsed = (performance.now() - startedAt) / 1000;
-
-    renderPacketStats(sent, received, count, elapsed);
-    $('packet-log').textContent = [
-      continuous ? 'Modo continuo activo (test local).' : `Prueba en ejecución: ${sent}/${count} (local).`,
-      `Latencia mínima: ${formatMs(min)}`,
-      `Latencia máxima: ${formatMs(max)}`,
-      `Pérdida estimada: ${loss.toFixed(2)} %`,
-      `Jitter: ${formatMs(jitter)}`,
-      `Fallos: ${failures}`,
-      state.packetRun.stopRequested ? 'Deteniendo prueba...' : 'Presiona "Detener" para finalizar.'
-    ].join('\n');
-
-    if (state.packetRun.stopRequested) break;
-    if (!continuous && sent >= count) break;
-    await sleep(interval);
-  }
-
-  state.packetRun.active = false;
-  $('start-packet-test').disabled = false;
-  $('stop-packet-test').disabled = true;
-
-  const finalLoss = sent ? ((sent - received) / sent) * 100 : 0;
-  $('packet-log').textContent = [
-    continuous ? 'Prueba continua local finalizada.' : 'Prueba local completada.',
-    `Solicitudes enviadas: ${sent}`,
-    `Solicitudes recibidas: ${received}`,
-    `Pérdida estimada final: ${finalLoss.toFixed(2)} %`
-  ].join('\n');
-}
-
 function parsePingSummary(output) {
   const text = String(output || '');
 
@@ -539,11 +468,7 @@ async function runPacketTestRemote({ count, target }) {
   }
 }
 
-async function runPacketTest({ count, interval, continuous }) {
-  if (continuous) {
-    $('packet-log').textContent = 'El modo continuo no esta habilitado en prueba remota.';
-    return;
-  }
+async function runPacketTest({ count }) {
   const target = $('packet-target')?.value?.trim();
   if (!target) {
     $('packet-log').textContent = 'Escribe un destino remoto (IP o dominio) para medir perdida externa.';
@@ -880,8 +805,7 @@ function wireEvents() {
 
   $('start-packet-test').addEventListener('click', async () => {
     const count = Math.max(1, Number($('packet-count').value || 20));
-    const interval = Math.max(50, Number($('packet-interval').value || 250));
-    await runPacketTest({ count, interval, continuous: false });
+    await runPacketTest({ count });
   });
 
 }
@@ -907,4 +831,5 @@ async function init() {
 }
 
 init();
+
 
