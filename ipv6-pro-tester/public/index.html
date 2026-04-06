@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css?v=20260406-ui-hotfix" />
 </head>
 <body>
   <header class="site-header">
@@ -26,6 +26,9 @@
 
   <main class="container main-grid">
     <section class="card hero-card">
+      <div style="margin-bottom: 10px; padding: 10px 14px; border-radius: 12px; border: 1px solid #22d3ee; background: rgba(34, 211, 238, 0.12); color: #67e8f9; font-weight: 700;">
+        VERSION APLICADA: UI-HOTFIX-2026-04-06
+      </div>
       <div class="score-group">
         <div class="score-panel">
           <div class="score-label">IPv6</div>
@@ -144,7 +147,7 @@
       <div class="section-head section-head-wrap">
         <div>
           <div class="eyebrow">Pérdida estimada</div>
-          <h2>Prueba de paquetes</h2>
+          <h2>Prueba de paquetes remota</h2>
         </div>
         <div class="inline-controls">
           <label>
@@ -159,7 +162,7 @@
       </div>
       <p class="section-copy">Esta prueba mide pérdida de paquetes en ruta externa ejecutando ping desde el servidor hacia el destino indicado.</p>
       <div class="button-row">
-        <button class="button button-primary" id="start-packet-test">Iniciar prueba</button>
+        <button class="button button-primary" id="start-packet-test">Iniciar prueba remota</button>
         <button class="button button-secondary" id="stop-packet-test" disabled>Detener</button>
       </div>
       <div class="packet-progress-container" id="packet-stats">
@@ -203,7 +206,7 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Velocidad</div>
-          <h2>Speed test real</h2>
+          <h2>Speed test real integrado</h2>
         </div>
       </div>
       <p class="section-copy">Ejecuta una prueba real embebida dentro de esta misma web. Fast y Speedtest se abren en pestañas externas por políticas de esos proveedores.</p>
@@ -306,6 +309,6 @@
     </div>
   </footer>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260406-ui-hotfix"></script>
 </body>
 </html>
