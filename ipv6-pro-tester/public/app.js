@@ -383,7 +383,6 @@ async function runPacketTestLocal({ count, interval, continuous }) {
   state.packetRun.stopRequested = false;
   state.packetRun.controller = null;
   $('start-packet-test').disabled = true;
-  $('start-continuous-test').disabled = true;
   $('stop-packet-test').disabled = false;
 
   let sent = 0;
@@ -426,9 +425,7 @@ async function runPacketTestLocal({ count, interval, continuous }) {
 
   state.packetRun.active = false;
   $('start-packet-test').disabled = false;
-  $('start-continuous-test').disabled = false;
   $('stop-packet-test').disabled = true;
-  setPacketModeUi();
 
   const finalLoss = sent ? ((sent - received) / sent) * 100 : 0;
   $('packet-log').textContent = [
@@ -484,7 +481,6 @@ async function runPacketTestRemote({ count, target }) {
   const controller = new AbortController();
   state.packetRun.controller = controller;
   $('start-packet-test').disabled = true;
-  $('start-continuous-test').disabled = true;
   $('stop-packet-test').disabled = false;
   $('packet-log').textContent = `Ejecutando prueba remota hacia ${target}...`;
 
@@ -539,75 +535,41 @@ async function runPacketTestRemote({ count, target }) {
     state.packetRun.active = false;
     state.packetRun.controller = null;
     $('start-packet-test').disabled = false;
-    $('start-continuous-test').disabled = false;
     $('stop-packet-test').disabled = true;
-    setPacketModeUi();
   }
 }
 
 async function runPacketTest({ count, interval, continuous }) {
-  const mode = $('packet-mode')?.value || 'local';
-  if (mode === 'remote') {
-    if (continuous) {
-      $('packet-log').textContent = 'El modo continuo aplica solo para prueba local.';
-      return;
-    }
-    const target = $('packet-target')?.value?.trim();
-    if (!target) {
-      $('packet-log').textContent = 'Escribe un destino remoto (IP o dominio) para medir perdida externa.';
-      return;
-    }
-    await runPacketTestRemote({ count, target });
+  if (continuous) {
+    $('packet-log').textContent = 'El modo continuo no esta habilitado en prueba remota.';
     return;
   }
-  await runPacketTestLocal({ count, interval, continuous });
+  const target = $('packet-target')?.value?.trim();
+  if (!target) {
+    $('packet-log').textContent = 'Escribe un destino remoto (IP o dominio) para medir perdida externa.';
+    return;
+  }
+  await runPacketTestRemote({ count, target });
 }
 
 async function runSpeedTest() {
-  $('run-local-speed').disabled = true;
+  const button = $('run-local-speed');
+  const wrap = $('embedded-speed-wrap');
+  const iframe = $('embedded-speed-iframe');
+  button.disabled = true;
   try {
-    const downloadStart = performance.now();
-    const response = await fetch(`/api/speed-payload?ts=${Date.now()}`, { cache: 'no-store' });
-    if (response.status === 429) throw new Error('429');
-    
-    const blob = await response.blob();
-    const downloadSeconds = (performance.now() - downloadStart) / 1000;
-    const downloadBits = blob.size * 8;
-    const downloadMbps = downloadSeconds > 0 ? downloadBits / downloadSeconds / 1_000_000 : 0;
-    setText('speed-download', `${downloadMbps.toFixed(2)} Mbps`);
-    setText('speed-size', `${(blob.size / (1024 * 1024)).toFixed(1)} MB`);
-
-    const uploadPayload = new Blob([new Uint8Array(2 * 1024 * 1024)], { type: 'application/octet-stream' });
-    const uploadStart = performance.now();
-    const uploadResponse = await fetch(`/api/speed-upload?ts=${Date.now()}`, {
-      method: 'POST',
-      cache: 'no-store',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: uploadPayload,
-    });
-    if (uploadResponse.status === 429) throw new Error('429');
-    if (!uploadResponse.ok) throw new Error(`UPLOAD_${uploadResponse.status}`);
-    const uploadSeconds = (performance.now() - uploadStart) / 1000;
-    const uploadBits = uploadPayload.size * 8;
-    const uploadMbps = uploadSeconds > 0 ? uploadBits / uploadSeconds / 1_000_000 : 0;
-    setText('speed-upload', `${uploadMbps.toFixed(2)} Mbps`);
-
-    const latency = await measurePingOnce();
-    setText('speed-latency', formatMs(latency));
-  } catch (_error) {
-    if (_error.message === '429') {
-      setText('speed-download', 'Espere 1 min');
-      setText('speed-upload', 'Espere 1 min');
-      setText('speed-latency', 'Límite');
-    } else {
-      setText('speed-download', 'Error');
-      setText('speed-upload', 'Error');
+    setText('speed-download', 'Cargando test real...');
+    setText('speed-upload', 'OpenSpeedTest');
+    setText('speed-latency', 'En progreso');
+    setText('speed-size', 'Real (Internet)');
+    if (wrap) wrap.style.display = 'block';
+    if (iframe && !iframe.src) {
+      iframe.src = 'https://openspeedtest.com/speedtest?Run=1';
     }
   } finally {
-    $('run-local-speed').disabled = false;
+    button.disabled = false;
   }
 }
-
 async function runGeneralTest() {
   $('run-main-test').disabled = true;
   try {
@@ -894,13 +856,6 @@ function exportReport() {
   URL.revokeObjectURL(url);
 }
 
-function setPacketModeUi() {
-  const mode = $('packet-mode')?.value || 'local';
-  const wrap = $('packet-target-wrap');
-  if (wrap) wrap.style.display = mode === 'remote' ? 'block' : 'none';
-  $('start-continuous-test').disabled = mode === 'remote' || state.packetRun.active;
-}
-
 function wireEvents() {
   $('run-main-test').addEventListener('click', runGeneralTest);
   $('run-local-speed').addEventListener('click', runSpeedTest);
@@ -914,9 +869,6 @@ function wireEvents() {
   });
   $('manual-ping-infinite').addEventListener('change', (event) => {
     $('manual-ping-count').disabled = event.target.checked;
-  });
-  $('packet-mode').addEventListener('change', () => {
-    setPacketModeUi();
   });
   $('export-report').addEventListener('click', exportReport);
   $('stop-packet-test').addEventListener('click', () => {
@@ -932,10 +884,6 @@ function wireEvents() {
     await runPacketTest({ count, interval, continuous: false });
   });
 
-  $('start-continuous-test').addEventListener('click', async () => {
-    const interval = Math.max(50, Number($('packet-interval').value || 250));
-    await runPacketTest({ count: Infinity, interval, continuous: true });
-  });
 }
 
 async function init() {
@@ -954,9 +902,9 @@ async function init() {
   setManualNetworkButtons(false);
   $('manual-ping-count').disabled = $('manual-ping-infinite').checked;
   wireEvents();
-  setPacketModeUi();
   await runGeneralTest();
   await loadGeolocation();
 }
 
 init();
+

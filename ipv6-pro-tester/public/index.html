@@ -148,13 +148,6 @@
         </div>
         <div class="inline-controls">
           <label>
-            <span>Modo</span>
-            <select id="packet-mode">
-              <option value="local" selected>Local (cliente ↔ portal)</option>
-              <option value="remote">Remoto (servidor ↔ destino)</option>
-            </select>
-          </label>
-          <label>
             <span>Solicitudes</span>
             <input type="number" id="packet-count" min="1" step="1" value="20" />
           </label>
@@ -162,16 +155,15 @@
             <span>Intervalo (ms)</span>
             <input type="number" id="packet-interval" min="50" step="50" value="250" />
           </label>
-          <label id="packet-target-wrap" style="display:none; min-width: 280px;">
+          <label id="packet-target-wrap" style="min-width: 280px;">
             <span>Destino remoto</span>
-            <input type="text" id="packet-target" placeholder="1.1.1.1 o google.com" />
+            <input type="text" id="packet-target" placeholder="1.1.1.1 o google.com" value="1.1.1.1" />
           </label>
         </div>
       </div>
-      <p class="section-copy">Modo Local: mide pérdida cliente ↔ portal con HTTP repetido. Modo Remoto: ejecuta ping del servidor hacia un destino para validar pérdida en ruta externa.</p>
+      <p class="section-copy">Esta prueba mide pérdida de paquetes en ruta externa ejecutando ping desde el servidor hacia el destino indicado.</p>
       <div class="button-row">
         <button class="button button-primary" id="start-packet-test">Iniciar prueba</button>
-        <button class="button button-secondary" id="start-continuous-test">Modo continuo</button>
         <button class="button button-secondary" id="stop-packet-test" disabled>Detener</button>
       </div>
       <div class="packet-progress-container" id="packet-stats">
@@ -215,20 +207,30 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Velocidad</div>
-          <h2>Speed test</h2>
+          <h2>Speed test real</h2>
         </div>
       </div>
-      <p class="section-copy">Puedes abrir pruebas externas o ejecutar una medición rápida local sobre el servidor actual.</p>
+      <p class="section-copy">Ejecuta una prueba real embebida dentro de esta misma web, o abre Fast/Speedtest.</p>
       <div class="button-row button-row-stack">
-        <button class="button button-primary" id="run-local-speed">Prueba rápida local</button>
+        <button class="button button-primary" id="run-local-speed">Iniciar test dentro de la web</button>
         <a class="button button-secondary" href="https://www.speedtest.net" target="_blank" rel="noreferrer">Abrir Speedtest</a>
         <a class="button button-secondary" href="https://fast.com" target="_blank" rel="noreferrer">Abrir Fast</a>
       </div>
+      <div id="embedded-speed-wrap" style="display:none; margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; min-height:360px;">
+        <iframe
+          id="embedded-speed-iframe"
+          title="Speed Test Real"
+          loading="lazy"
+          style="width:100%; height:480px; border:0;"
+          referrerpolicy="no-referrer"
+          src=""
+        ></iframe>
+      </div>
       <div class="speed-box">
-        <div><span>Descarga estimada</span><strong id="speed-download">0.00 Mbps</strong></div>
-        <div><span>Subida estimada</span><strong id="speed-upload">0.00 Mbps</strong></div>
-        <div><span>Latencia</span><strong id="speed-latency">0 ms</strong></div>
-        <div><span>Tamaño de prueba</span><strong id="speed-size">0 MB</strong></div>
+        <div><span>Estado</span><strong id="speed-download">Listo para iniciar</strong></div>
+        <div><span>Proveedor embebido</span><strong id="speed-upload">OpenSpeedTest</strong></div>
+        <div><span>Alternativas</span><strong id="speed-latency">Fast / Speedtest</strong></div>
+        <div><span>Tipo</span><strong id="speed-size">Real (Internet)</strong></div>
       </div>
     </section>
 
