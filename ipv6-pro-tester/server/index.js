@@ -4,8 +4,29 @@ const path = require('path');
 const net = require('net');
 const dns = require('dns').promises;
 const { spawn } = require('child_process');
-const rateLimit = require('express-rate-limit');
-const kill = require('tree-kill');
+let rateLimit;
+let kill;
+
+try {
+  rateLimit = require('express-rate-limit');
+} catch (_error) {
+  console.warn('[Startup] express-rate-limit no esta instalado. Se desactiva el rate limiting localmente.');
+  rateLimit = () => (_req, _res, next) => next();
+}
+
+try {
+  kill = require('tree-kill');
+} catch (_error) {
+  console.warn('[Startup] tree-kill no esta instalado. Se usa process.kill como respaldo local.');
+  kill = (pid, _signal, callback) => {
+    try {
+      process.kill(pid);
+      callback?.(null);
+    } catch (error) {
+      callback?.(error);
+    }
+  };
+}
 
 const app = express();
 app.set('trust proxy', 1); // Confiar en 1 nivel de proxy (Nginx)
