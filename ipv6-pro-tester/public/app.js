@@ -626,41 +626,54 @@ async function runManualNetworkTool(tool) {
 }
 
 async function checkDomain() {
-  const domain = $('domain-input').value.trim();
-  if (!domain) {
-    $('domain-result').textContent = 'Escribe un dominio válido para revisar sus registros.';
+  const target = $('domain-input').value.trim();
+  if (!target) {
+    $('domain-result').textContent = 'Escribe un dominio o IP válida para revisar datos DNS.';
     return;
   }
 
   $('check-domain').disabled = true;
-  $('domain-result').textContent = 'Revisando dominio...';
+  $('domain-result').textContent = 'Revisando objetivo...';
   try {
-    const result = await fetchJson(`/api/domain-check?domain=${encodeURIComponent(domain)}`);
+    const result = await fetchJson(`/api/domain-check?domain=${encodeURIComponent(target)}`);
     const ipv4Count = result.aRecords.length;
     const ipv6Count = result.aaaaRecords.length;
 
-    // Estado principal — claro y sin ambigüedad
-    let status;
-    if (ipv4Count && ipv6Count) {
-      status = '✅ Dual Stack activo: el dominio tiene registros IPv4 e IPv6.';
-    } else if (ipv4Count) {
-      status = '🟡 Solo IPv4: el dominio aún no tiene registros AAAA (IPv6).';
-    } else if (ipv6Count) {
-      status = '🔵 Solo IPv6: el dominio no tiene registros A (IPv4).';
-    } else {
-      status = '❌ Sin registros: no se encontraron direcciones IPv4 ni IPv6.';
-    }
-
     const lines = [
-      `Dominio: ${result.domain}`,
-      status,
+      `Tipo: ${result.type === 'ip' ? 'IP' : 'Dominio'}`,
+      `Objetivo normalizado: ${result.target || target}`,
       `IPv4 (A):    ${ipv4Count ? result.aRecords.join(', ') : 'Sin registros'}`,
       `IPv6 (AAAA): ${ipv6Count ? result.aaaaRecords.join(', ') : 'Sin registros'}`,
     ];
 
+    if (result.type === 'ip') {
+      lines.push(`Host reverso (PTR): ${result.ptrRecords?.length ? result.ptrRecords.join(', ') : 'Sin registros'}`);
+      lines.push(`ASN: ${result.asn?.asn || 'No disponible'}`);
+      if (result.asn) {
+        lines.push(`Owner ASN: ${result.asn.owner || 'No disponible'}`);
+        lines.push(`Prefijo ASN: ${result.asn.prefix || 'No disponible'}`);
+      }
+    } else {
+      let status;
+      if (ipv4Count && ipv6Count) {
+        status = 'Dual Stack activo (A y AAAA).';
+      } else if (ipv4Count) {
+        status = 'Solo IPv4 (sin AAAA).';
+      } else if (ipv6Count) {
+        status = 'Solo IPv6 (sin A).';
+      } else {
+        status = 'Sin registros A/AAAA.';
+      }
+      lines.splice(2, 0, `Estado: ${status}`);
+    }
+
     // Solo mostramos errores reales (no el "sin registros" esperado)
     if (result.errors && result.errors.length) {
-      lines.push(`⚠️ Errores DNS: ${result.errors.join(' | ')}`);
+      lines.push(`Errores DNS: ${result.errors.join(' | ')}`);
+    }
+
+    if (result.warnings && result.warnings.length) {
+      lines.push(`Avisos: ${result.warnings.join(' | ')}`);
     }
 
     $('domain-result').textContent = lines.join('\n');

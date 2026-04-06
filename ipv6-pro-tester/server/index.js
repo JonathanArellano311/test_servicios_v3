@@ -101,6 +101,63 @@ function normalizeTarget(input) {
   }
 }
 
+function expandIpv6(address) {
+  const lowered = String(address || '').toLowerCase();
+  const zoneIndex = lowered.indexOf('%');
+  const clean = zoneIndex >= 0 ? lowered.slice(0, zoneIndex) : lowered;
+  const [left = '', right = ''] = clean.split('::');
+  const leftParts = left ? left.split(':').filter(Boolean) : [];
+  const rightParts = right ? right.split(':').filter(Boolean) : [];
+
+  if (leftParts.length + rightParts.length > 8) return null;
+
+  const missing = 8 - (leftParts.length + rightParts.length);
+  const middle = new Array(missing).fill('0');
+  const full = [...leftParts, ...middle, ...rightParts].map((part) => part.padStart(4, '0'));
+  return full.length === 8 ? full.join('') : null;
+}
+
+async function resolveAsnForIp(ipAddress) {
+  const family = net.isIP(ipAddress);
+  if (!family) return null;
+
+  let originHost = '';
+  if (family === 4) {
+    originHost = `${ipAddress.split('.').reverse().join('.')}.origin.asn.cymru.com`;
+  } else {
+    const expanded = expandIpv6(ipAddress);
+    if (!expanded) return null;
+    originHost = `${expanded.split('').reverse().join('.')}.origin6.asn.cymru.com`;
+  }
+
+  const originTxtRecords = await dns.resolveTxt(originHost);
+  const originLine = (originTxtRecords?.[0] || []).join('');
+  const originParts = originLine.split('|').map((item) => item.trim());
+  const asnRaw = originParts[0] || '';
+  const asnPrimary = asnRaw.split(/\s+/)[0];
+  if (!asnPrimary || !/^\d+$/.test(asnPrimary)) return null;
+
+  const asnHost = `AS${asnPrimary}.asn.cymru.com`;
+  let owner = '';
+  try {
+    const asnTxtRecords = await dns.resolveTxt(asnHost);
+    const asnLine = (asnTxtRecords?.[0] || []).join('');
+    const asnParts = asnLine.split('|').map((item) => item.trim());
+    owner = asnParts[4] || '';
+  } catch (_error) {
+    // Algunos resolvers no permiten TXT de owner; mantenemos ASN parcial.
+  }
+
+  return {
+    asn: `AS${asnPrimary}`,
+    prefix: originParts[1] || '',
+    countryCode: originParts[2] || '',
+    registry: originParts[3] || '',
+    allocatedAt: originParts[4] || '',
+    owner,
+  };
+}
+
 function buildNetworkCommand(tool, target, options = {}) {
   const isWin = os.platform() === 'win32';
 
@@ -273,34 +330,69 @@ app.get('/api/network-tool/stream', (req, res) => {
 });
 
 app.get('/api/domain-check', async (req, res) => {
-  const domain = String(req.query.domain || '').trim().toLowerCase();
-  if (!domain) {
-    res.status(400).json({ error: 'Debes indicar un dominio.' });
+  const rawInput = String(req.query.domain || req.query.target || '').trim();
+  const target = normalizeTarget(rawInput);
+  if (!target) {
+    res.status(400).json({ error: 'Debes indicar un dominio, IP o URL valida.' });
     return;
   }
 
-  // Códigos que indican «sin registros» (esperado, no son errores reales).
+  // Codigos que indican "sin registros" (esperado, no son errores reales).
   const NO_RECORD_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
+  const normalizedTarget = target.toLowerCase();
+  const isIp = Boolean(net.isIP(normalizedTarget));
 
-  const output = { domain, aRecords: [], aaaaRecords: [], warnings: [], errors: [] };
+  const output = {
+    input: rawInput,
+    target: normalizedTarget,
+    type: isIp ? 'ip' : 'domain',
+    aRecords: [],
+    aaaaRecords: [],
+    ptrRecords: [],
+    asn: null,
+    warnings: [],
+    errors: [],
+  };
 
-  try {
-    output.aRecords = await dns.resolve4(domain);
-  } catch (error) {
-    if (NO_RECORD_CODES.has(error.code)) {
-      output.warnings.push('IPv4 (A): sin registros');
-    } else {
-      output.errors.push(`A: ${error.code || error.message}`);
+  if (isIp) {
+    if (net.isIP(normalizedTarget) === 4) output.aRecords = [normalizedTarget];
+    if (net.isIP(normalizedTarget) === 6) output.aaaaRecords = [normalizedTarget];
+
+    try {
+      output.ptrRecords = await dns.reverse(normalizedTarget);
+    } catch (error) {
+      if (NO_RECORD_CODES.has(error.code)) {
+        output.warnings.push('PTR: sin registros de host reverso');
+      } else {
+        output.errors.push(`PTR: ${error.code || error.message}`);
+      }
     }
-  }
 
-  try {
-    output.aaaaRecords = await dns.resolve6(domain);
-  } catch (error) {
-    if (NO_RECORD_CODES.has(error.code)) {
-      output.warnings.push('IPv6 (AAAA): sin registros');
-    } else {
-      output.errors.push(`AAAA: ${error.code || error.message}`);
+    try {
+      output.asn = await resolveAsnForIp(normalizedTarget);
+      if (!output.asn) output.warnings.push('ASN: no se pudo determinar');
+    } catch (error) {
+      output.errors.push(`ASN: ${error.code || error.message}`);
+    }
+  } else {
+    try {
+      output.aRecords = await dns.resolve4(normalizedTarget);
+    } catch (error) {
+      if (NO_RECORD_CODES.has(error.code)) {
+        output.warnings.push('IPv4 (A): sin registros');
+      } else {
+        output.errors.push(`A: ${error.code || error.message}`);
+      }
+    }
+
+    try {
+      output.aaaaRecords = await dns.resolve6(normalizedTarget);
+    } catch (error) {
+      if (NO_RECORD_CODES.has(error.code)) {
+        output.warnings.push('IPv6 (AAAA): sin registros');
+      } else {
+        output.errors.push(`AAAA: ${error.code || error.message}`);
+      }
     }
   }
 
@@ -314,3 +406,4 @@ app.get('*', (_req, res) => {
 app.listen(PORT, HOST, () => {
   console.log(`Test_Servicios running on http://${HOST}:${PORT}`);
 });
+
