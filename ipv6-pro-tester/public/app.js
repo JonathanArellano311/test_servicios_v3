@@ -220,7 +220,7 @@ function renderPacketStats(sent, received, count, elapsed) {
 
 function renderStats(items) {
   $('network-stats').innerHTML = items.map((item) => `
-    <div class="stat-box">
+    <div class="stat-box ${item.className || ''}">
       <span>${item.label}</span>
       <strong>${item.value}</strong>
     </div>
@@ -350,7 +350,7 @@ function updateTestResults() {
 function updateOverview(latency = 0, largePayload = null) {
   renderStats([
     { label: 'IPv4 pública del cliente', value: state.clientNetwork.publicIPv4 || 'No detectada en esta sesión' },
-    { label: 'IPv6 pública del cliente', value: state.clientNetwork.publicIPv6 || 'No detectada en esta sesión' },
+    { label: 'IPv6 pública del cliente', value: state.clientNetwork.publicIPv6 || 'No detectada en esta sesión', className: 'stat-box-wide stat-box-ipv6' },
     { label: 'Ruta actual al portal', value: state.ipInfo?.family || 'Desconocido' },
     { label: 'IPv4 local del cliente', value: state.clientNetwork.localIPv4 || 'No disponible en este navegador' },
     { label: 'IPv6 local del cliente', value: state.clientNetwork.localIPv6 || 'No disponible en este navegador' },
@@ -477,24 +477,6 @@ async function runPacketTest({ count }) {
   await runPacketTestRemote({ count, target });
 }
 
-async function runSpeedTest() {
-  const button = $('run-local-speed');
-  const wrap = $('embedded-speed-wrap');
-  const iframe = $('embedded-speed-iframe');
-  button.disabled = true;
-  try {
-    setText('speed-download', 'Cargando test real...');
-    setText('speed-upload', 'OpenSpeedTest');
-    setText('speed-latency', 'En progreso');
-    setText('speed-size', 'Real (Internet)');
-    if (wrap) wrap.style.display = 'block';
-    if (iframe && !iframe.src) {
-      iframe.src = 'https://openspeedtest.com/speedtest?Run=1';
-    }
-  } finally {
-    button.disabled = false;
-  }
-}
 async function runGeneralTest() {
   $('run-main-test').disabled = true;
   try {
@@ -783,7 +765,6 @@ function exportReport() {
 
 function wireEvents() {
   $('run-main-test').addEventListener('click', runGeneralTest);
-  $('run-local-speed').addEventListener('click', runSpeedTest);
   $('check-domain').addEventListener('click', checkDomain);
   $('run-manual-ping').addEventListener('click', () => runManualNetworkTool('ping'));
   $('run-manual-tracert').addEventListener('click', () => runManualNetworkTool('tracert'));

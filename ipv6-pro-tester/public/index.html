@@ -26,9 +26,6 @@
 
   <main class="container main-grid">
     <section class="card hero-card">
-      <div style="margin-bottom: 10px; padding: 10px 14px; border-radius: 12px; border: 1px solid #22d3ee; background: rgba(34, 211, 238, 0.12); color: #67e8f9; font-weight: 700;">
-        VERSION APLICADA: UI-HOTFIX-2026-04-06
-      </div>
       <div class="score-group">
         <div class="score-panel">
           <div class="score-label">IPv6</div>
@@ -206,30 +203,18 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Velocidad</div>
-          <h2>Speed test real integrado</h2>
+          <h2>Speed test</h2>
         </div>
       </div>
-      <p class="section-copy">Ejecuta una prueba real embebida dentro de esta misma web. Fast y Speedtest se abren en pestañas externas por políticas de esos proveedores.</p>
+      <p class="section-copy">Ejecuta una prueba real con proveedores externos. Se abre fuera de esta web para medir velocidad real de Internet sin simular datos internos.</p>
       <div class="button-row button-row-stack">
-        <button class="button button-primary" id="run-local-speed">Iniciar test dentro de la web</button>
-        <a class="button button-secondary" href="https://www.speedtest.net" target="_blank" rel="noreferrer">Abrir Speedtest</a>
+        <a class="button button-primary" href="https://www.speedtest.net" target="_blank" rel="noreferrer">Abrir Speedtest</a>
         <a class="button button-secondary" href="https://fast.com" target="_blank" rel="noreferrer">Abrir Fast</a>
       </div>
-      <div id="embedded-speed-wrap" style="display:none; margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; min-height:360px;">
-        <iframe
-          id="embedded-speed-iframe"
-          title="Speed Test Real"
-          loading="lazy"
-          style="width:100%; height:480px; border:0;"
-          referrerpolicy="no-referrer"
-          src=""
-        ></iframe>
-      </div>
       <div class="speed-box">
-        <div><span>Estado</span><strong id="speed-download">Listo para iniciar</strong></div>
-        <div><span>Proveedor embebido</span><strong id="speed-upload">OpenSpeedTest</strong></div>
-        <div><span>Alternativas</span><strong id="speed-latency">Fast / Speedtest</strong></div>
-        <div><span>Tipo</span><strong id="speed-size">Real (Internet)</strong></div>
+        <div><span>Estado</span><strong>Listo para abrir</strong></div>
+        <div><span>Proveedores</span><strong>Speedtest / Fast</strong></div>
+        <div><span>Tipo</span><strong>Real (Internet)</strong></div>
       </div>
     </section>
 

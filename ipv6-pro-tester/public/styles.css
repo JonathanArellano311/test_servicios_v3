@@ -117,7 +117,21 @@ body {
   padding: 16px;
 }
 .stat-box span { display: block; color: var(--muted); font-size: 0.9rem; }
-.stat-box strong { display: block; margin-top: 8px; font-size: 1.1rem; line-height: 1.4; }
+.stat-box strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.stat-box-wide {
+  grid-column: span 2;
+  min-height: 118px;
+}
+.stat-box-ipv6 strong {
+  font-size: 1.2rem;
+}
 .test-list { display: grid; gap: 10px; }
 .test-item {
   display: flex;
@@ -367,6 +381,6 @@ input {
 
 @media (max-width: 780px) {
   .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container, .packet-counter-grid { grid-template-columns: 1fr; }
-  .hero-card, .span-2 { grid-column: span 1; }
+  .hero-card, .span-2, .stat-box-wide { grid-column: span 1; }
   .domain-field input { min-width: 100%; }
 }
