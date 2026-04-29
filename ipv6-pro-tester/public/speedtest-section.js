@@ -6,6 +6,8 @@
     maxVisualMbps: 1000,
     downloadMb: 20,
     uploadMb: 10,
+    downloadDurationMs: 12000,
+    uploadTimeoutMs: 12000,
   };
 
   const state = {
@@ -58,6 +60,7 @@
     if (phase === 'download' || phase === 'ready') state.activeMetric = 'download';
     if (phase === 'upload') state.activeMetric = 'upload';
 
+    const card = $('speedtest-section');
     const phaseLabel = $('speed-phase-label');
     const uploadChannel = $('speed-upload-channel');
     const downloadChannel = $('speed-download-channel');
@@ -72,9 +75,21 @@
       error: 'Error',
     };
 
+    if (card) {
+      const finishedDownload = phase === 'finished' && state.activeMetric === 'download';
+      const finishedUpload = phase === 'finished' && state.activeMetric === 'upload';
+      card.classList.toggle('is-download', phase === 'download' || phase === 'ready' || finishedDownload);
+      card.classList.toggle('is-upload', phase === 'upload' || phase === 'reset' || finishedUpload);
+    }
     if (phaseLabel) phaseLabel.textContent = labels[phase] || 'Preparado';
     if (uploadChannel) uploadChannel.classList.toggle('is-active', phase === 'upload');
     if (downloadChannel) downloadChannel.classList.toggle('is-active', phase === 'download' || phase === 'ready');
+  }
+
+  function setPhaseProgress(percent) {
+    const fill = $('speed-phase-progress-fill');
+    if (!fill) return;
+    fill.style.width = `${clamp(Number(percent || 0), 0, 100)}%`;
   }
 
   function updateGauge(value) {
@@ -107,6 +122,7 @@
 
   function resetValues() {
     setPhase('ready');
+    setPhaseProgress(0);
     renderValues({ ping: 0, jitter: 0, download: 0, upload: 0 });
   }
 
@@ -147,6 +163,7 @@
         : 0;
 
       renderValues({ ping: avgPing, jitter });
+      setPhaseProgress(((index + 1) / 5) * 100);
     }
   }
 
@@ -175,30 +192,44 @@
     }
 
     const reader = response.body.getReader();
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
+    let reachedTimeLimit = false;
+    const downloadTimeout = window.setTimeout(() => {
+      reachedTimeLimit = true;
+      reader.cancel().catch(() => {});
+    }, SPEEDTEST_CONFIG.downloadDurationMs);
 
-      loadedBytes += value.byteLength;
-      const now = performance.now();
-      const elapsedSinceLast = now - lastAt;
+    try {
+      while (!reachedTimeLimit) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      if (elapsedSinceLast >= 140) {
-        const instantSpeed = calculateMbps(loadedBytes - lastBytes, elapsedSinceLast);
-        displayedSpeed = smoothSpeed(displayedSpeed, instantSpeed);
-        renderValues({ download: displayedSpeed });
-        lastBytes = loadedBytes;
-        lastAt = now;
+        loadedBytes += value.byteLength;
+        const now = performance.now();
+        const elapsedSinceLast = now - lastAt;
+        const elapsedTotal = now - startedAt;
+        setPhaseProgress((elapsedTotal / SPEEDTEST_CONFIG.downloadDurationMs) * 100);
+
+        if (elapsedSinceLast >= 140) {
+          const instantSpeed = calculateMbps(loadedBytes - lastBytes, elapsedSinceLast);
+          displayedSpeed = smoothSpeed(displayedSpeed, instantSpeed);
+          renderValues({ download: displayedSpeed });
+          lastBytes = loadedBytes;
+          lastAt = now;
+        }
       }
+    } finally {
+      window.clearTimeout(downloadTimeout);
     }
 
     const finalSpeed = calculateMbps(loadedBytes, performance.now() - startedAt);
+    setPhaseProgress(100);
     renderValues({ download: finalSpeed });
     return finalSpeed;
   }
 
   function measureUpload(signal) {
     setPhase('reset');
+    setPhaseProgress(0);
     updateGauge(0);
     setStatus('running', 'Preparando medicion de subida...');
 
@@ -215,11 +246,13 @@
       signal.addEventListener('abort', abortUpload, { once: true });
 
       xhr.open('POST', `/api/speed-upload?ts=${Date.now()}`, true);
+      xhr.timeout = SPEEDTEST_CONFIG.uploadTimeoutMs;
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 
       xhr.upload.onloadstart = () => {
         startedAt = performance.now();
         setPhase('upload');
+        setPhaseProgress(0);
         setStatus('running', 'Midiendo subida...');
       };
 
@@ -227,6 +260,9 @@
         const elapsed = performance.now() - startedAt;
         const measured = calculateMbps(event.loaded, elapsed);
         displayedSpeed = smoothSpeed(displayedSpeed, measured);
+        const byteProgress = event.lengthComputable ? (event.loaded / event.total) * 100 : 0;
+        const timeProgress = (elapsed / SPEEDTEST_CONFIG.uploadTimeoutMs) * 100;
+        setPhaseProgress(Math.max(byteProgress, Math.min(timeProgress, 98)));
         renderValues({ upload: displayedSpeed });
       };
 
@@ -240,6 +276,7 @@
         }
 
         const finalSpeed = calculateMbps(uploadBytes, performance.now() - startedAt);
+        setPhaseProgress(100);
         renderValues({ upload: finalSpeed });
         resolve(finalSpeed);
       };
@@ -248,6 +285,18 @@
         signal.removeEventListener('abort', abortUpload);
         state.xhr = null;
         reject(new Error('No fue posible medir la subida.'));
+      };
+
+      xhr.ontimeout = () => {
+        signal.removeEventListener('abort', abortUpload);
+        state.xhr = null;
+        if (displayedSpeed > 0) {
+          renderValues({ upload: displayedSpeed });
+          setPhaseProgress(100);
+          resolve(displayedSpeed);
+          return;
+        }
+        reject(new Error('La medicion de subida excedio el tiempo esperado.'));
       };
 
       xhr.onabort = () => {
@@ -304,6 +353,7 @@
       state.controller = null;
       setButtons(false);
       setPhase('finished');
+      setPhaseProgress(100);
       setStatus('finished', 'Prueba completada con medicion local contra este servidor.');
     } catch (error) {
       state.running = false;
@@ -311,6 +361,7 @@
       setButtons(false);
       if (error.name === 'AbortError') {
         setPhase('ready');
+        setPhaseProgress(0);
         setStatus('ready', 'Prueba detenida.');
         return;
       }
@@ -364,6 +415,7 @@
     state.running = false;
     setButtons(false);
     setPhase('ready');
+    setPhaseProgress(0);
     setStatus('ready', 'Prueba detenida.');
   }
 
@@ -384,6 +436,7 @@
     stop: stopSpeedTest,
     update: renderValues,
     setPhase,
+    setPhaseProgress,
     finish: () => {
       setPhase('finished');
       setStatus('finished', 'Prueba completada correctamente.');
