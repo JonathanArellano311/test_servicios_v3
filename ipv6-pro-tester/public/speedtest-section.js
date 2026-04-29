@@ -1,13 +1,16 @@
 (function () {
   const SPEEDTEST_CONFIG = {
     // Cambia a "librespeed" cuando publiques LibreSpeed y cargues /librespeed/speedtest.js.
-    mode: 'fallback',
+    mode: 'local',
     scriptReadyGlobal: 'Speedtest',
     maxVisualMbps: 1000,
+    downloadMb: 20,
+    uploadMb: 10,
   };
 
   const state = {
     controller: null,
+    xhr: null,
     timer: null,
     running: false,
     phase: 'ready',
@@ -116,6 +119,147 @@
     };
   }
 
+  function calculateMbps(bytes, elapsedMs) {
+    if (!bytes || !elapsedMs || elapsedMs <= 0) return 0;
+    return (bytes * 8) / (elapsedMs / 1000) / 1000000;
+  }
+
+  function smoothSpeed(previous, next) {
+    if (!previous) return next;
+    const weight = next > previous ? 0.58 : 0.35;
+    return (previous * (1 - weight)) + (next * weight);
+  }
+
+  async function measurePingAndJitter(signal) {
+    setPhase('ping');
+    setStatus('running', 'Midiendo ping y jitter...');
+
+    const samples = [];
+    for (let index = 0; index < 5; index += 1) {
+      const startedAt = performance.now();
+      await fetch(`/api/ping?ts=${Date.now()}-${index}`, { cache: 'no-store', signal });
+      const latency = performance.now() - startedAt;
+      samples.push(latency);
+
+      const avgPing = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+      const jitter = samples.length > 1
+        ? samples.slice(1).reduce((sum, value, itemIndex) => sum + Math.abs(value - samples[itemIndex]), 0) / (samples.length - 1)
+        : 0;
+
+      renderValues({ ping: avgPing, jitter });
+    }
+  }
+
+  async function measureDownload(signal) {
+    setPhase('download');
+    setStatus('running', 'Midiendo descarga...');
+
+    const response = await fetch(`/api/speed-payload?mb=${SPEEDTEST_CONFIG.downloadMb}&ts=${Date.now()}`, {
+      cache: 'no-store',
+      signal,
+    });
+
+    if (!response.ok) throw new Error(`Descarga: error ${response.status}`);
+
+    const startedAt = performance.now();
+    let loadedBytes = 0;
+    let lastBytes = 0;
+    let lastAt = startedAt;
+    let displayedSpeed = 0;
+
+    if (!response.body) {
+      const data = await response.arrayBuffer();
+      displayedSpeed = calculateMbps(data.byteLength, performance.now() - startedAt);
+      renderValues({ download: displayedSpeed });
+      return displayedSpeed;
+    }
+
+    const reader = response.body.getReader();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      loadedBytes += value.byteLength;
+      const now = performance.now();
+      const elapsedSinceLast = now - lastAt;
+
+      if (elapsedSinceLast >= 140) {
+        const instantSpeed = calculateMbps(loadedBytes - lastBytes, elapsedSinceLast);
+        displayedSpeed = smoothSpeed(displayedSpeed, instantSpeed);
+        renderValues({ download: displayedSpeed });
+        lastBytes = loadedBytes;
+        lastAt = now;
+      }
+    }
+
+    const finalSpeed = calculateMbps(loadedBytes, performance.now() - startedAt);
+    renderValues({ download: finalSpeed });
+    return finalSpeed;
+  }
+
+  function measureUpload(signal) {
+    setPhase('reset');
+    updateGauge(0);
+    setStatus('running', 'Preparando medicion de subida...');
+
+    return new Promise((resolve, reject) => {
+      const uploadBytes = SPEEDTEST_CONFIG.uploadMb * 1024 * 1024;
+      const payload = new Uint8Array(uploadBytes);
+      const xhr = new XMLHttpRequest();
+      let displayedSpeed = 0;
+      let startedAt = 0;
+
+      state.xhr = xhr;
+
+      const abortUpload = () => xhr.abort();
+      signal.addEventListener('abort', abortUpload, { once: true });
+
+      xhr.open('POST', `/api/speed-upload?ts=${Date.now()}`, true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+      xhr.upload.onloadstart = () => {
+        startedAt = performance.now();
+        setPhase('upload');
+        setStatus('running', 'Midiendo subida...');
+      };
+
+      xhr.upload.onprogress = (event) => {
+        const elapsed = performance.now() - startedAt;
+        const measured = calculateMbps(event.loaded, elapsed);
+        displayedSpeed = smoothSpeed(displayedSpeed, measured);
+        renderValues({ upload: displayedSpeed });
+      };
+
+      xhr.onload = () => {
+        signal.removeEventListener('abort', abortUpload);
+        state.xhr = null;
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(`Subida: error ${xhr.status}`));
+          return;
+        }
+
+        const finalSpeed = calculateMbps(uploadBytes, performance.now() - startedAt);
+        renderValues({ upload: finalSpeed });
+        resolve(finalSpeed);
+      };
+
+      xhr.onerror = () => {
+        signal.removeEventListener('abort', abortUpload);
+        state.xhr = null;
+        reject(new Error('No fue posible medir la subida.'));
+      };
+
+      xhr.onabort = () => {
+        signal.removeEventListener('abort', abortUpload);
+        state.xhr = null;
+        reject(new DOMException('Prueba detenida.', 'AbortError'));
+      };
+
+      xhr.send(payload);
+    });
+  }
+
   function startLibreSpeedTest() {
     if (!window[SPEEDTEST_CONFIG.scriptReadyGlobal]) {
       throw new Error('LibreSpeed no esta cargado. Publica speedtest.js y cambia el modo a librespeed.');
@@ -147,72 +291,42 @@
     test.start();
   }
 
-  function startFallbackTest() {
-    let tick = 0;
-    const totalTicks = 190;
-    const downloadTarget = 180 + Math.random() * 160;
-    const uploadTarget = 35 + Math.random() * 85;
-    const pingTarget = 8 + Math.random() * 24;
-    const jitterTarget = 1 + Math.random() * 8;
+  async function startLocalSpeedTest() {
+    const controller = new AbortController();
+    state.controller = controller;
 
-    state.timer = window.setInterval(() => {
-      tick += 1;
+    try {
+      await measurePingAndJitter(controller.signal);
+      await measureDownload(controller.signal);
+      await measureUpload(controller.signal);
 
-      if (tick < 20) {
-        setPhase('ping');
-        const progress = tick / 20;
-        renderValues({
-          ping: pingTarget * progress * 3.5,
-          jitter: jitterTarget * progress * 3.5,
-        });
-        setStatus('running', 'Midiendo ping y jitter...');
-      } else if (tick < 125) {
-        setPhase('download');
-        const progress = (tick - 20) / 105;
-        const eased = Math.sin(progress * Math.PI * 0.5);
-        renderValues({
-          ping: pingTarget,
-          jitter: jitterTarget,
-          download: downloadTarget * clamp(eased, 0, 1),
-        });
-        setStatus('running', 'Midiendo descarga...');
-      } else if (tick < 130) {
-        setPhase('reset');
-        updateGauge(0);
-        setStatus('running', 'Preparando medicion de subida...');
-      } else {
-        setPhase('upload');
-        const progress = (tick - 130) / 60;
-        const eased = Math.sin(progress * Math.PI * 0.5);
-        renderValues({
-          ping: pingTarget,
-          jitter: jitterTarget,
-          download: downloadTarget,
-          upload: uploadTarget * clamp(eased, 0, 1),
-        });
-        setStatus('running', 'Midiendo subida...');
+      state.running = false;
+      state.controller = null;
+      setButtons(false);
+      setPhase('finished');
+      setStatus('finished', 'Prueba completada con medicion local contra este servidor.');
+    } catch (error) {
+      state.running = false;
+      state.controller = null;
+      setButtons(false);
+      if (error.name === 'AbortError') {
+        setPhase('ready');
+        setStatus('ready', 'Prueba detenida.');
+        return;
       }
-
-      if (tick >= totalTicks) {
-        stopCurrentTimer();
-        state.running = false;
-        setButtons(false);
-        setPhase('finished');
-        renderValues({
-          ping: pingTarget,
-          jitter: jitterTarget,
-          download: downloadTarget,
-          upload: uploadTarget,
-        });
-        setStatus('finished', 'Prueba completada. Lista para conectarse al backend LibreSpeed real.');
-      }
-    }, 200);
+      setPhase('error');
+      setStatus('error', error.message || 'No fue posible completar el test de velocidad.');
+    }
   }
 
   function stopCurrentTimer() {
     if (state.timer) {
       window.clearInterval(state.timer);
       state.timer = null;
+    }
+    if (state.xhr) {
+      state.xhr.abort();
+      state.xhr = null;
     }
   }
 
@@ -229,7 +343,7 @@
       if (SPEEDTEST_CONFIG.mode === 'librespeed') {
         startLibreSpeedTest();
       } else {
-        startFallbackTest();
+        startLocalSpeedTest();
       }
     } catch (error) {
       state.running = false;

@@ -34,7 +34,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Buffer pre-procesado: Esto evita alocar 5MB de RAM en cada petición concurrente a la prueba de velocidad
-const STATIC_SPEED_BUFFER = Buffer.alloc(5 * 1024 * 1024, 'a');
+const STATIC_SPEED_BUFFER = Buffer.alloc(25 * 1024 * 1024, 'a');
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -251,23 +251,25 @@ app.get('/api/large-payload', (req, res) => {
   res.json({ ok: true, bytes: sizeBytes });
 });
 
-app.get('/api/speed-payload', (_req, res) => {
+app.get('/api/speed-payload', (req, res) => {
+  const requestedMb = Math.min(Math.max(Number(req.query.mb || 20), 1), 25);
+  const sizeBytes = requestedMb * 1024 * 1024;
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
   // Servimos estáticamente el mismo payload pre-cargado
-  res.send(STATIC_SPEED_BUFFER);
+  res.send(STATIC_SPEED_BUFFER.subarray(0, sizeBytes));
 });
 
 app.post('/api/speed-upload', (req, res) => {
   let bytes = 0;
-  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
   let rejected = false;
 
   req.on('data', (chunk) => {
     bytes += chunk.length;
     if (bytes > MAX_UPLOAD_BYTES && !rejected) {
       rejected = true;
-      res.status(413).json({ error: 'Payload demasiado grande (maximo 5 MB).' });
+      res.status(413).json({ error: 'Payload demasiado grande (maximo 25 MB).' });
       req.destroy();
     }
   });
