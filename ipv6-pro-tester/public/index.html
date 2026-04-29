@@ -199,7 +199,7 @@
       <div class="packet-log" id="packet-log">Aún no se ha ejecutado ninguna prueba de paquetes.</div>
     </section>
 
-    <section class="card speedtest-card" id="speedtest-section">
+    <section class="card speedtest-card span-2" id="speedtest-section">
       <div class="section-head">
         <div>
           <div class="eyebrow">Velocidad</div>
@@ -207,26 +207,44 @@
         </div>
         <span class="speed-status-pill" id="speedtest-state">Listo</span>
       </div>
-      <p class="section-copy">Modulo embebido preparado para LibreSpeed self-hosted. Mientras el backend real no este activo, muestra una simulacion visual controlada.</p>
+      <p class="section-copy">Modulo embebido preparado para LibreSpeed self-hosted. El panel mide primero subida y luego descarga; mientras el backend real no este activo, muestra una simulacion visual controlada.</p>
 
-      <div class="speed-dashboard" data-speedtest-mode="demo">
-        <div class="speed-primary">
-          <span>Descarga</span>
-          <strong><span id="speed-download">0.00</span> Mbps</strong>
-          <div class="speed-meter">
-            <div class="speed-meter-fill" id="speed-download-bar"></div>
-          </div>
+      <div class="speed-topline">
+        <div class="speed-channel is-active" id="speed-upload-channel">
+          <span>Subida Mbps</span>
+          <strong><span id="speed-upload">0.00</span></strong>
         </div>
-        <div class="speed-primary">
-          <span>Subida</span>
-          <strong><span id="speed-upload">0.00</span> Mbps</strong>
-          <div class="speed-meter">
-            <div class="speed-meter-fill speed-meter-fill-upload" id="speed-upload-bar"></div>
+        <div class="speed-channel" id="speed-download-channel">
+          <span>Descarga Mbps</span>
+          <strong><span id="speed-download">0.00</span></strong>
+        </div>
+      </div>
+
+      <div class="speed-gauge-layout" data-speedtest-mode="demo">
+        <div class="speed-gauge">
+          <div class="speed-gauge-scale">
+            <span style="--angle: -130deg;">0</span>
+            <span style="--angle: -98deg;">5</span>
+            <span style="--angle: -68deg;">10</span>
+            <span style="--angle: -30deg;">100</span>
+            <span style="--angle: 10deg;">250</span>
+            <span style="--angle: 48deg;">500</span>
+            <span style="--angle: 82deg;">750</span>
+            <span style="--angle: 124deg;">1000</span>
+          </div>
+          <div class="speed-gauge-arc">
+            <div class="speed-gauge-progress" id="speed-gauge-progress"></div>
+            <div class="speed-gauge-mask"></div>
+            <div class="speed-needle" id="speed-needle"></div>
+            <div class="speed-gauge-center">
+              <strong><span id="speed-current-value">0.00</span></strong>
+              <span id="speed-current-unit">Mbps</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="speed-mini-grid">
+      <div class="speed-mini-grid speed-mini-grid-prominent">
         <div class="speed-metric">
           <span>Ping</span>
           <strong><span id="speed-ping">0</span> ms</strong>
@@ -238,6 +256,10 @@
         <div class="speed-metric">
           <span>Modo</span>
           <strong id="speed-mode-label">Demo</strong>
+        </div>
+        <div class="speed-metric">
+          <span>Fase</span>
+          <strong id="speed-phase-label">Preparado</strong>
         </div>
       </div>
 

@@ -395,14 +395,15 @@ input {
   background: rgba(251, 113, 133, 0.12);
 }
 
-.speed-dashboard {
+.speed-topline {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-top: 16px;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  justify-content: center;
+  gap: 28px;
+  margin-top: 18px;
 }
 
-.speed-primary,
+.speed-channel,
 .speed-metric,
 .speed-status-log {
   background: rgba(255,255,255,0.04);
@@ -410,42 +411,146 @@ input {
   border-radius: 16px;
 }
 
-.speed-primary {
+.speed-channel {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 94px;
   padding: 16px;
+  text-align: center;
+  color: rgba(237, 243, 255, 0.62);
+  background: rgba(255,255,255,0.025);
 }
 
-.speed-primary span,
+.speed-channel::after {
+  content: "";
+  width: 58px;
+  height: 2px;
+  margin: 4px auto 0;
+  border-radius: 999px;
+  background: rgba(237, 243, 255, 0.34);
+}
+
+.speed-channel.is-active {
+  border-color: rgba(94, 234, 212, 0.36);
+  background: rgba(94, 234, 212, 0.08);
+  color: var(--text);
+}
+
+.speed-channel.is-active::after {
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+}
+
+.speed-channel span,
 .speed-metric span {
   color: var(--muted);
   display: block;
   font-size: 0.9rem;
 }
 
-.speed-primary strong {
+.speed-channel strong {
   display: block;
-  margin-top: 8px;
-  font-size: clamp(1.9rem, 4vw, 2.65rem);
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
   line-height: 1;
 }
 
-.speed-meter {
-  height: 8px;
+.speed-gauge-layout {
+  display: grid;
+  place-items: center;
+  min-height: 390px;
+  margin: 8px 0 4px;
+}
+
+.speed-gauge {
+  position: relative;
+  width: min(440px, 100%);
+  aspect-ratio: 1 / 0.78;
+}
+
+.speed-gauge-arc,
+.speed-gauge-progress,
+.speed-gauge-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50% 50% 12% 12%;
+}
+
+.speed-gauge-arc {
   overflow: hidden;
-  background: rgba(255,255,255,0.08);
-  border-radius: 999px;
-  margin-top: 14px;
+  background:
+    conic-gradient(from 220deg, rgba(94, 234, 212, 0.98) 0deg, rgba(125, 211, 252, 0.95) 95deg, rgba(35, 52, 88, 0.95) 96deg, rgba(35, 52, 88, 0.95) 260deg, transparent 0deg);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 20px 42px rgba(0,0,0,0.26);
 }
 
-.speed-meter-fill {
-  width: 0%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  transition: width 0.35s ease;
+.speed-gauge-progress {
+  background:
+    conic-gradient(from 220deg, rgba(94, 234, 212, 0.96) 0deg, rgba(125, 211, 252, 0.98) var(--gauge-deg, 0deg), rgba(255,255,255,0.08) var(--gauge-deg, 0deg), rgba(255,255,255,0.08) 260deg, transparent 0deg);
+  transition: background 0.35s ease;
 }
 
-.speed-meter-fill-upload {
-  background: linear-gradient(90deg, #a7f3d0, #60a5fa);
+.speed-gauge-mask {
+  inset: 36px;
+  background:
+    radial-gradient(circle at 50% 62%, rgba(125, 211, 252, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(11, 18, 32, 0.98), rgba(15, 23, 42, 0.98));
+  box-shadow: inset 0 12px 28px rgba(0,0,0,0.38);
+}
+
+.speed-gauge-scale {
+  position: absolute;
+  inset: 42px 40px 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.speed-gauge-scale span {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  color: rgba(237, 243, 255, 0.76);
+  font-weight: 800;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--angle))
+    translateY(-138px)
+    rotate(calc(-1 * var(--angle)));
+}
+
+.speed-needle {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 61%;
+  width: 12px;
+  height: 150px;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, #ffffff, rgba(125, 211, 252, 0.15));
+  box-shadow: 0 0 20px rgba(125, 211, 252, 0.24);
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%) rotate(var(--needle-angle, -130deg));
+  transition: transform 0.35s ease;
+}
+
+.speed-gauge-center {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 35px;
+  display: grid;
+  justify-items: center;
+  transform: translateX(-50%);
+  color: var(--text);
+}
+
+.speed-gauge-center strong {
+  font-size: clamp(2.25rem, 6vw, 3.45rem);
+  line-height: 1;
+  font-weight: 500;
+}
+
+.speed-gauge-center span {
+  color: var(--muted);
+  margin-top: 6px;
 }
 
 .speed-mini-grid {
@@ -453,6 +558,10 @@ input {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 12px;
+}
+
+.speed-mini-grid.speed-mini-grid-prominent {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .speed-metric {
@@ -492,7 +601,16 @@ input {
 }
 
 @media (max-width: 780px) {
-  .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container, .packet-counter-grid, .speed-mini-grid, .speed-actions { grid-template-columns: 1fr; }
+  .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container, .packet-counter-grid, .speed-mini-grid, .speed-actions, .speed-topline { grid-template-columns: 1fr; }
   .hero-card, .span-2, .span-full, .stat-box-wide { grid-column: span 1; }
   .domain-field input { min-width: 100%; }
+  .speed-gauge-layout { min-height: 310px; }
+  .speed-gauge-scale span {
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--angle))
+      translateY(-102px)
+      rotate(calc(-1 * var(--angle)));
+  }
+  .speed-needle { height: 112px; }
 }

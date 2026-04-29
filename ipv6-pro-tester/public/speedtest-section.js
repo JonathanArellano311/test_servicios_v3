@@ -3,7 +3,7 @@
     // Cambia a "librespeed" cuando publiques LibreSpeed y cargues /librespeed/speedtest.js.
     mode: 'demo',
     scriptReadyGlobal: 'Speedtest',
-    maxVisualMbps: 500,
+    maxVisualMbps: 1000,
   };
 
   const state = {
@@ -49,21 +49,56 @@
     if (stop) stop.disabled = !running;
   }
 
+  function setPhase(phase) {
+    state.phase = phase;
+    const phaseLabel = $('speed-phase-label');
+    const uploadChannel = $('speed-upload-channel');
+    const downloadChannel = $('speed-download-channel');
+
+    const labels = {
+      ready: 'Preparado',
+      ping: 'Ping',
+      upload: 'Subida',
+      download: 'Descarga',
+      finished: 'Finalizado',
+      error: 'Error',
+    };
+
+    if (phaseLabel) phaseLabel.textContent = labels[phase] || 'Preparado';
+    if (uploadChannel) uploadChannel.classList.toggle('is-active', phase === 'upload' || phase === 'ready');
+    if (downloadChannel) downloadChannel.classList.toggle('is-active', phase === 'download');
+  }
+
+  function updateGauge(value) {
+    const bounded = clamp(Number(value || 0), 0, SPEEDTEST_CONFIG.maxVisualMbps);
+    const progress = bounded / SPEEDTEST_CONFIG.maxVisualMbps;
+    const degrees = progress * 260;
+    const needleAngle = -130 + degrees;
+    const gauge = $('speed-gauge-progress');
+    const needle = $('speed-needle');
+    const current = $('speed-current-value');
+
+    if (gauge) gauge.style.setProperty('--gauge-deg', `${degrees}deg`);
+    if (needle) needle.style.setProperty('--needle-angle', `${needleAngle}deg`);
+    if (current) current.textContent = formatNumber(value);
+  }
+
   function renderValues(values) {
     state.values = { ...state.values, ...values };
-
-    const download = clamp(Number(state.values.download || 0), 0, SPEEDTEST_CONFIG.maxVisualMbps);
-    const upload = clamp(Number(state.values.upload || 0), 0, SPEEDTEST_CONFIG.maxVisualMbps);
 
     $('speed-ping').textContent = formatNumber(state.values.ping, 0);
     $('speed-jitter').textContent = formatNumber(state.values.jitter, 0);
     $('speed-download').textContent = formatNumber(state.values.download);
     $('speed-upload').textContent = formatNumber(state.values.upload);
-    $('speed-download-bar').style.width = `${(download / SPEEDTEST_CONFIG.maxVisualMbps) * 100}%`;
-    $('speed-upload-bar').style.width = `${(upload / SPEEDTEST_CONFIG.maxVisualMbps) * 100}%`;
+
+    const activeValue = (state.phase === 'download' || state.phase === 'finished')
+      ? state.values.download
+      : state.values.upload;
+    updateGauge(activeValue);
   }
 
   function resetValues() {
+    setPhase('ready');
     renderValues({ ping: 0, jitter: 0, download: 0, upload: 0 });
   }
 
@@ -94,7 +129,10 @@
     state.controller = test;
 
     test.onupdate = (data) => {
-      renderValues(normalizeLibreSpeedData(data || {}));
+      const normalized = normalizeLibreSpeedData(data || {});
+      if (normalized.upload > 0 && normalized.download <= 0) setPhase('upload');
+      if (normalized.download > 0) setPhase('download');
+      renderValues(normalized);
       setStatus('running', 'Midiendo velocidad con LibreSpeed...');
     };
 
@@ -102,6 +140,7 @@
       state.running = false;
       state.controller = null;
       setButtons(false);
+      setPhase(aborted ? 'ready' : 'finished');
       setStatus(aborted ? 'ready' : 'finished', aborted ? 'Prueba detenida.' : 'Prueba completada correctamente.');
     };
 
@@ -122,32 +161,36 @@
       const wave = Math.sin(progress * Math.PI);
 
       if (tick < 10) {
+        setPhase('ping');
         renderValues({
           ping: pingTarget * progress * 3.5,
           jitter: jitterTarget * progress * 3.5,
         });
         setStatus('running', 'Midiendo ping y jitter...');
-      } else if (tick < 29) {
+      } else if (tick < 28) {
+        setPhase('upload');
         renderValues({
           ping: pingTarget,
           jitter: jitterTarget,
+          upload: uploadTarget * clamp(wave * 1.16, 0, 1),
+        });
+        setStatus('running', 'Midiendo subida...');
+      } else {
+        setPhase('download');
+        renderValues({
+          ping: pingTarget,
+          jitter: jitterTarget,
+          upload: uploadTarget,
           download: downloadTarget * clamp(wave * 1.08, 0, 1),
         });
         setStatus('running', 'Midiendo descarga...');
-      } else {
-        renderValues({
-          ping: pingTarget,
-          jitter: jitterTarget,
-          download: downloadTarget,
-          upload: uploadTarget * clamp(wave * 1.2, 0, 1),
-        });
-        setStatus('running', 'Midiendo subida...');
       }
 
       if (tick >= totalTicks) {
         stopCurrentTimer();
         state.running = false;
         setButtons(false);
+        setPhase('finished');
         renderValues({
           ping: pingTarget,
           jitter: jitterTarget,
@@ -172,6 +215,7 @@
     resetValues();
     state.running = true;
     setButtons(true);
+    setPhase('ping');
     setStatus('running', 'Preparando prueba...');
 
     try {
@@ -198,6 +242,7 @@
     state.controller = null;
     state.running = false;
     setButtons(false);
+    setPhase('ready');
     setStatus('ready', 'Prueba detenida.');
   }
 
@@ -218,7 +263,11 @@
     start: startSpeedTest,
     stop: stopSpeedTest,
     update: renderValues,
-    finish: () => setStatus('finished', 'Prueba completada correctamente.'),
+    setPhase,
+    finish: () => {
+      setPhase('finished');
+      setStatus('finished', 'Prueba completada correctamente.');
+    },
   };
 
   document.addEventListener('DOMContentLoaded', wireSpeedTest);
