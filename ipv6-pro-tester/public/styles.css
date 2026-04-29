@@ -478,13 +478,13 @@ input {
 .speed-gauge-arc {
   overflow: hidden;
   background:
-    conic-gradient(from 220deg, rgba(94, 234, 212, 0.98) 0deg, rgba(125, 211, 252, 0.95) 95deg, rgba(35, 52, 88, 0.95) 96deg, rgba(35, 52, 88, 0.95) 260deg, transparent 0deg);
+    conic-gradient(from 220deg, rgba(45, 64, 104, 0.96) 0deg, rgba(45, 64, 104, 0.96) 260deg, transparent 0deg);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 20px 42px rgba(0,0,0,0.26);
 }
 
 .speed-gauge-progress {
   background:
-    conic-gradient(from 220deg, rgba(94, 234, 212, 0.96) 0deg, rgba(125, 211, 252, 0.98) var(--gauge-deg, 0deg), rgba(255,255,255,0.08) var(--gauge-deg, 0deg), rgba(255,255,255,0.08) 260deg, transparent 0deg);
+    conic-gradient(from 220deg, rgba(94, 234, 212, 0.96) 0deg, rgba(125, 211, 252, 0.98) var(--gauge-deg, 0deg), transparent var(--gauge-deg, 0deg), transparent 260deg, transparent 0deg);
   transition: background 0.35s ease;
 }
 
@@ -561,7 +561,7 @@ input {
 }
 
 .speed-mini-grid.speed-mini-grid-prominent {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .speed-metric {

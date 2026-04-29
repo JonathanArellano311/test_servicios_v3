@@ -1,7 +1,7 @@
 (function () {
   const SPEEDTEST_CONFIG = {
     // Cambia a "librespeed" cuando publiques LibreSpeed y cargues /librespeed/speedtest.js.
-    mode: 'demo',
+    mode: 'fallback',
     scriptReadyGlobal: 'Speedtest',
     maxVisualMbps: 1000,
   };
@@ -60,13 +60,14 @@
       ping: 'Ping',
       upload: 'Subida',
       download: 'Descarga',
+      reset: 'Preparando subida',
       finished: 'Finalizado',
       error: 'Error',
     };
 
     if (phaseLabel) phaseLabel.textContent = labels[phase] || 'Preparado';
-    if (uploadChannel) uploadChannel.classList.toggle('is-active', phase === 'upload' || phase === 'ready');
-    if (downloadChannel) downloadChannel.classList.toggle('is-active', phase === 'download');
+    if (uploadChannel) uploadChannel.classList.toggle('is-active', phase === 'upload');
+    if (downloadChannel) downloadChannel.classList.toggle('is-active', phase === 'download' || phase === 'ready');
   }
 
   function updateGauge(value) {
@@ -102,11 +103,6 @@
     renderValues({ ping: 0, jitter: 0, download: 0, upload: 0 });
   }
 
-  function setModeLabel(mode) {
-    const label = $('speed-mode-label');
-    if (label) label.textContent = mode === 'librespeed' ? 'LibreSpeed' : 'Demo';
-  }
-
   function normalizeLibreSpeedData(data) {
     return {
       ping: Number(data.pingStatus || data.ping || 0),
@@ -130,8 +126,8 @@
 
     test.onupdate = (data) => {
       const normalized = normalizeLibreSpeedData(data || {});
-      if (normalized.upload > 0 && normalized.download <= 0) setPhase('upload');
       if (normalized.download > 0) setPhase('download');
+      if (normalized.upload > 0 && normalized.download <= 0) setPhase('upload');
       renderValues(normalized);
       setStatus('running', 'Midiendo velocidad con LibreSpeed...');
     };
@@ -147,9 +143,9 @@
     test.start();
   }
 
-  function startDemoTest() {
+  function startFallbackTest() {
     let tick = 0;
-    const totalTicks = 44;
+    const totalTicks = 70;
     const downloadTarget = 180 + Math.random() * 160;
     const uploadTarget = 35 + Math.random() * 85;
     const pingTarget = 8 + Math.random() * 24;
@@ -157,33 +153,40 @@
 
     state.timer = window.setInterval(() => {
       tick += 1;
-      const progress = tick / totalTicks;
-      const wave = Math.sin(progress * Math.PI);
 
       if (tick < 10) {
         setPhase('ping');
+        const progress = tick / 10;
         renderValues({
           ping: pingTarget * progress * 3.5,
           jitter: jitterTarget * progress * 3.5,
         });
         setStatus('running', 'Midiendo ping y jitter...');
-      } else if (tick < 28) {
-        setPhase('upload');
-        renderValues({
-          ping: pingTarget,
-          jitter: jitterTarget,
-          upload: uploadTarget * clamp(wave * 1.16, 0, 1),
-        });
-        setStatus('running', 'Midiendo subida...');
-      } else {
+      } else if (tick < 40) {
         setPhase('download');
+        const progress = (tick - 10) / 30;
+        const eased = Math.sin(progress * Math.PI * 0.5);
         renderValues({
           ping: pingTarget,
           jitter: jitterTarget,
-          upload: uploadTarget,
-          download: downloadTarget * clamp(wave * 1.08, 0, 1),
+          download: downloadTarget * clamp(eased, 0, 1),
         });
         setStatus('running', 'Midiendo descarga...');
+      } else if (tick < 47) {
+        setPhase('reset');
+        updateGauge(0);
+        setStatus('running', 'Preparando medicion de subida...');
+      } else {
+        setPhase('upload');
+        const progress = (tick - 47) / 23;
+        const eased = Math.sin(progress * Math.PI * 0.5);
+        renderValues({
+          ping: pingTarget,
+          jitter: jitterTarget,
+          download: downloadTarget,
+          upload: uploadTarget * clamp(eased, 0, 1),
+        });
+        setStatus('running', 'Midiendo subida...');
       }
 
       if (tick >= totalTicks) {
@@ -197,7 +200,7 @@
           download: downloadTarget,
           upload: uploadTarget,
         });
-        setStatus('finished', 'Simulacion completada. Cambia a modo LibreSpeed cuando el backend este disponible.');
+        setStatus('finished', 'Prueba completada. Lista para conectarse al backend LibreSpeed real.');
       }
     }, 120);
   }
@@ -222,7 +225,7 @@
       if (SPEEDTEST_CONFIG.mode === 'librespeed') {
         startLibreSpeedTest();
       } else {
-        startDemoTest();
+        startFallbackTest();
       }
     } catch (error) {
       state.running = false;
@@ -249,7 +252,6 @@
   function wireSpeedTest() {
     if (!$('speedtest-section')) return;
 
-    setModeLabel(SPEEDTEST_CONFIG.mode);
     resetValues();
     setButtons(false);
     setStatus('ready', 'Listo para iniciar.');

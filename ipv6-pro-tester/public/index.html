@@ -207,20 +207,20 @@
         </div>
         <span class="speed-status-pill" id="speedtest-state">Listo</span>
       </div>
-      <p class="section-copy">Modulo embebido preparado para LibreSpeed self-hosted. El panel mide primero subida y luego descarga; mientras el backend real no este activo, muestra una simulacion visual controlada.</p>
+      <p class="section-copy">Modulo embebido preparado para LibreSpeed self-hosted. El panel mide primero descarga y luego subida, con lectura en tiempo real desde la misma vista del portal.</p>
 
       <div class="speed-topline">
-        <div class="speed-channel is-active" id="speed-upload-channel">
-          <span>Subida Mbps</span>
-          <strong><span id="speed-upload">0.00</span></strong>
-        </div>
-        <div class="speed-channel" id="speed-download-channel">
+        <div class="speed-channel is-active" id="speed-download-channel">
           <span>Descarga Mbps</span>
           <strong><span id="speed-download">0.00</span></strong>
         </div>
+        <div class="speed-channel" id="speed-upload-channel">
+          <span>Subida Mbps</span>
+          <strong><span id="speed-upload">0.00</span></strong>
+        </div>
       </div>
 
-      <div class="speed-gauge-layout" data-speedtest-mode="demo">
+      <div class="speed-gauge-layout">
         <div class="speed-gauge">
           <div class="speed-gauge-scale">
             <span style="--angle: -130deg;">0</span>
@@ -252,10 +252,6 @@
         <div class="speed-metric">
           <span>Jitter</span>
           <strong><span id="speed-jitter">0</span> ms</strong>
-        </div>
-        <div class="speed-metric">
-          <span>Modo</span>
-          <strong id="speed-mode-label">Demo</strong>
         </div>
         <div class="speed-metric">
           <span>Fase</span>
