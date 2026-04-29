@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Centro de Diagnóstico de Red</title>
-  <meta name="description" content="Plataforma profesional para diagnóstico de conectividad IPv4, IPv6, latencia, pérdida, velocidad y validación DNS." />
+  <meta name="description" content="Herramientas para revisar conectividad IPv4, IPv6, latencia, pérdida, velocidad y DNS." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
   <header class="site-header">
     <div class="container">
       <div class="brand-block">
-        <div class="eyebrow">Plataforma profesional de análisis de conectividad</div>
+        <div class="eyebrow">Herramientas de conectividad</div>
         <h1>Centro de Diagnóstico de Red</h1>
-        <p>Evalúa conectividad IPv4 e IPv6, latencia, jitter, pérdida estimada, rendimiento local y resolución DNS desde una sola vista operativa.</p>
+        <p>Revisa IPv4, IPv6, latencia, pérdida, velocidad y DNS desde una sola pantalla.</p>
       </div>
       <div class="header-controls">
         <button class="button button-primary" id="run-main-test">Ejecutar diagnóstico general</button>
@@ -44,11 +44,82 @@
         </div>
       </div>
       <div class="hero-summary" id="hero-summary">
-        Ejecuta el diagnóstico para obtener una lectura clara del estado de tu red y su preparación para operar con IPv6.
+        Ejecuta la prueba para revisar el estado de tu conexión.
       </div>
       <div class="section-copy" id="local-mode-note" style="margin-top: 14px;">
-        Las pruebas internas utilizan tu red local y este mismo servidor. Son ideales para validar conectividad, backend y tiempos de respuesta dentro de tu entorno.
+        Las pruebas se ejecutan contra este servidor y muestran el comportamiento de la ruta actual.
       </div>
+    </section>
+
+    <section class="card speedtest-card span-2" id="speedtest-section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Velocidad</div>
+          <h2>Test de Velocidad</h2>
+        </div>
+        <span class="speed-status-pill" id="speedtest-state">Listo</span>
+      </div>
+      <p class="section-copy">Mide descarga, subida, ping y jitter contra el servidor de prueba.</p>
+
+      <div class="speed-topline">
+        <div class="speed-channel is-active" id="speed-download-channel">
+          <span>Descarga Mbps</span>
+          <strong><span id="speed-download">0.00</span></strong>
+        </div>
+        <div class="speed-channel" id="speed-upload-channel">
+          <span>Subida Mbps</span>
+          <strong><span id="speed-upload">0.00</span></strong>
+        </div>
+      </div>
+
+      <div class="speed-gauge-layout">
+        <div class="speed-gauge">
+          <div class="speed-gauge-scale">
+            <span style="--angle: -130deg;">0</span>
+            <span style="--angle: -98deg;">5</span>
+            <span style="--angle: -68deg;">10</span>
+            <span style="--angle: -30deg;">100</span>
+            <span style="--angle: 10deg;">250</span>
+            <span style="--angle: 48deg;">500</span>
+            <span style="--angle: 82deg;">750</span>
+            <span style="--angle: 124deg;">1000</span>
+          </div>
+          <div class="speed-gauge-arc">
+            <div class="speed-gauge-progress" id="speed-gauge-progress"></div>
+            <div class="speed-gauge-mask"></div>
+            <div class="speed-needle" id="speed-needle"></div>
+            <div class="speed-gauge-center">
+              <strong><span id="speed-current-value">0.00</span></strong>
+              <span id="speed-current-unit">Mbps</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="speed-phase-progress" aria-hidden="true">
+        <div class="speed-phase-progress-fill" id="speed-phase-progress-fill"></div>
+      </div>
+
+      <div class="speed-mini-grid speed-mini-grid-prominent">
+        <div class="speed-metric">
+          <span>Ping</span>
+          <strong><span id="speed-ping">0</span> ms</strong>
+        </div>
+        <div class="speed-metric">
+          <span>Jitter</span>
+          <strong><span id="speed-jitter">0</span> ms</strong>
+        </div>
+        <div class="speed-metric">
+          <span>Fase</span>
+          <strong id="speed-phase-label">Preparado</strong>
+        </div>
+      </div>
+
+      <div class="speed-actions">
+        <button class="button button-primary" id="start-speedtest">Iniciar prueba</button>
+        <button class="button button-secondary" id="stop-speedtest" disabled>Detener</button>
+      </div>
+      <div class="speed-status-log" id="speedtest-message">Listo para iniciar.</div>
     </section>
 
     <section class="card span-2">
@@ -199,77 +270,6 @@
       <div class="packet-log" id="packet-log">Aún no se ha ejecutado ninguna prueba de paquetes.</div>
     </section>
 
-    <section class="card speedtest-card span-2" id="speedtest-section">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow">Velocidad</div>
-          <h2>Test de Velocidad</h2>
-        </div>
-        <span class="speed-status-pill" id="speedtest-state">Listo</span>
-      </div>
-      <p class="section-copy">Modulo embebido preparado para LibreSpeed self-hosted. El panel mide primero descarga y luego subida, con lectura en tiempo real desde la misma vista del portal.</p>
-
-      <div class="speed-topline">
-        <div class="speed-channel is-active" id="speed-download-channel">
-          <span>Descarga Mbps</span>
-          <strong><span id="speed-download">0.00</span></strong>
-        </div>
-        <div class="speed-channel" id="speed-upload-channel">
-          <span>Subida Mbps</span>
-          <strong><span id="speed-upload">0.00</span></strong>
-        </div>
-      </div>
-
-      <div class="speed-gauge-layout">
-        <div class="speed-gauge">
-          <div class="speed-gauge-scale">
-            <span style="--angle: -130deg;">0</span>
-            <span style="--angle: -98deg;">5</span>
-            <span style="--angle: -68deg;">10</span>
-            <span style="--angle: -30deg;">100</span>
-            <span style="--angle: 10deg;">250</span>
-            <span style="--angle: 48deg;">500</span>
-            <span style="--angle: 82deg;">750</span>
-            <span style="--angle: 124deg;">1000</span>
-          </div>
-          <div class="speed-gauge-arc">
-            <div class="speed-gauge-progress" id="speed-gauge-progress"></div>
-            <div class="speed-gauge-mask"></div>
-            <div class="speed-needle" id="speed-needle"></div>
-            <div class="speed-gauge-center">
-              <strong><span id="speed-current-value">0.00</span></strong>
-              <span id="speed-current-unit">Mbps</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="speed-phase-progress" aria-hidden="true">
-        <div class="speed-phase-progress-fill" id="speed-phase-progress-fill"></div>
-      </div>
-
-      <div class="speed-mini-grid speed-mini-grid-prominent">
-        <div class="speed-metric">
-          <span>Ping</span>
-          <strong><span id="speed-ping">0</span> ms</strong>
-        </div>
-        <div class="speed-metric">
-          <span>Jitter</span>
-          <strong><span id="speed-jitter">0</span> ms</strong>
-        </div>
-        <div class="speed-metric">
-          <span>Fase</span>
-          <strong id="speed-phase-label">Preparado</strong>
-        </div>
-      </div>
-
-      <div class="speed-actions">
-        <button class="button button-primary" id="start-speedtest">Iniciar prueba</button>
-        <button class="button button-secondary" id="stop-speedtest" disabled>Detener</button>
-      </div>
-      <div class="speed-status-log" id="speedtest-message">Listo para iniciar.</div>
-    </section>
-
     <section class="card span-2">
       <div class="section-head section-head-wrap">
         <div>
@@ -341,8 +341,7 @@
   <footer class="site-footer">
     <div class="container footer-content">
       <p>© 2026 Centro de Diagnóstico de Red. Todos los derechos reservados.</p>
-      <p>Elaborado por Networx Solutions C.A. para uso autorizado.</p>
-      <p>Propietario y titular de la plataforma: Ing. Jonathan Arellano.</p>
+      <p>Servicio de consulta para redes y conectividad.</p>
     </div>
   </footer>
 

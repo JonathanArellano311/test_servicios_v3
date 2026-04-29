@@ -210,7 +210,7 @@ app.get('/api/config', (_req, res) => {
   res.json({
     appName: 'Test_Servicios',
     notes: {
-      localMode: 'En local puedes validar interfaz, backend, ping, tracert y lógica. Para pruebas IPv6 externas completas necesitas publicar el sitio en un servidor con IPv4, IPv6 y DNS adecuado.',
+      localMode: 'En red local puedes revisar ping, tracert, DNS y conectividad. Las pruebas externas dependen de la ruta disponible.',
     },
   });
 });
@@ -262,7 +262,7 @@ app.get('/api/speed-payload', (req, res) => {
   const sizeBytes = requestedMb * 1024 * 1024;
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
-  // Servimos estáticamente el mismo payload pre-cargado
+  // Servimos el mismo bloque pre-cargado para evitar alocaciones por solicitud.
   res.send(STATIC_SPEED_BUFFER.subarray(0, sizeBytes));
 });
 

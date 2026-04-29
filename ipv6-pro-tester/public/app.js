@@ -17,7 +17,7 @@ const state = {
   tests: [
     { id: 'visitor-ip', title: 'Detección de IP', details: 'Pendiente', status: 'pending' },
     { id: 'same-origin', title: 'Respuesta del servidor', details: 'Pendiente', status: 'pending' },
-    { id: 'large-payload', title: 'Paquetes grandes', details: 'Pendiente', status: 'pending' },
+    { id: 'large-payload', title: 'Transferencia de datos', details: 'Pendiente', status: 'pending' },
     { id: 'stack-check', title: 'Compatibilidad IPv4 / IPv6', details: 'Pendiente', status: 'pending' },
   ]
 };
@@ -319,13 +319,13 @@ function updateTestResults() {
   state.tests[1] = {
     ...state.tests[1],
     status: state.health?.ok ? 'ok' : 'fail',
-    details: state.health?.ok ? 'El backend respondió correctamente al chequeo de salud.' : 'No hubo respuesta válida del backend.'
+    details: state.health?.ok ? 'El servidor respondió correctamente.' : 'No hubo respuesta válida del servidor.'
   };
 
   state.tests[2] = {
     ...state.tests[2],
     status: 'warn',
-    details: 'Ejecuta la prueba general para validar la transferencia de payload grande.'
+    details: 'Ejecuta la prueba general para validar la transferencia de datos.'
   };
 
   state.tests[3] = {
@@ -492,15 +492,15 @@ async function runGeneralTest() {
       ...state.tests[2],
       status: largePayload?.ok ? 'ok' : 'fail',
       details: largePayload?.ok
-        ? `Respuesta correcta con un payload de ${(largePayload.bytes / (1024 * 1024)).toFixed(1)} MB.`
-        : 'La transferencia de payload grande no respondió correctamente.'
+        ? `Transferencia correcta de ${(largePayload.bytes / (1024 * 1024)).toFixed(1)} MB.`
+        : 'La transferencia de datos no respondió correctamente.'
     };
     renderTests();
 
     const family = state.ipInfo?.family || 'Desconocido';
     const hasClientIPv6 = Boolean(state.clientNetwork.publicIPv6);
     const summary = state.environment.isInternal
-      ? 'Modo interno detectado: puedes ejecutar tus pruebas dentro de esta red y validar backend, latencia, paquetes, ping, tracert y DNS sin publicar el sitio.'
+      ? 'Red interna detectada: puedes revisar latencia, paquetes, ping, tracert y DNS desde esta conexión.'
       : hasClientIPv6 && family === 'IPv4'
       ? `El cliente sí tiene IPv6 activa (${state.clientNetwork.publicIPv6}), pero esta visita al portal llegó por IPv4.`
       : family === 'IPv6'
@@ -511,8 +511,8 @@ async function runGeneralTest() {
 
     setText('hero-summary', summary);
     setText('local-mode-note', state.environment.isInternal
-      ? 'Las pruebas internas están activas. Todo lo principal se valida contra tu servidor local y tu red.'
-      : 'Este entorno parece publicado o externo. Algunas comprobaciones de IPv6 dependen de conectividad real hacia Internet.');
+      ? 'Las pruebas se ejecutan contra este servidor y la red actual.'
+      : 'Algunas comprobaciones dependen de la ruta de Internet disponible en este momento.');
   } catch (error) {
     if (error.message && error.message.includes('429')) {
       setText('hero-summary', 'Has superado el límite de pruebas continuas preventivo. Por favor, espera 1 minuto para enfriar el sistema.');

@@ -1,6 +1,6 @@
 (function () {
   const SPEEDTEST_CONFIG = {
-    // Cambia a "librespeed" cuando publiques LibreSpeed y cargues /librespeed/speedtest.js.
+    // Cambia a "librespeed" cuando el servicio dedicado de velocidad este disponible.
     mode: 'local',
     scriptReadyGlobal: 'Speedtest',
     maxVisualMbps: 1000,
@@ -323,13 +323,12 @@
 
   function startLibreSpeedTest() {
     if (!window[SPEEDTEST_CONFIG.scriptReadyGlobal]) {
-      throw new Error('LibreSpeed no esta cargado. Publica speedtest.js y cambia el modo a librespeed.');
+      throw new Error('El servicio de velocidad no está disponible.');
     }
 
-    // Aqui se conecta el backend real de LibreSpeed:
-    // 1. Sirve speedtest.js desde tu instalacion self-hosted.
-    // 2. Agrega su <script> antes de speedtest-section.js o carga el script dinamicamente.
-    // 3. Configura endpoints y servidores con test.setParameter(...) segun tu despliegue.
+    // Aqui se conecta el servicio dedicado de velocidad:
+    // 1. Carga el script de medicion antes de este archivo.
+    // 2. Configura endpoints y servidores con test.setParameter(...) segun tu despliegue.
     const test = new window[SPEEDTEST_CONFIG.scriptReadyGlobal]();
     state.controller = test;
 
@@ -338,7 +337,7 @@
       if (normalized.download > 0) setPhase('download');
       if (normalized.upload > 0 && normalized.download <= 0) setPhase('upload');
       renderValues(normalized);
-      setStatus('running', 'Midiendo velocidad con LibreSpeed...');
+      setStatus('running', 'Midiendo velocidad...');
     };
 
     test.onend = (aborted) => {
@@ -366,7 +365,7 @@
       setButtons(false);
       setPhase('finished');
       setPhaseProgress(100);
-      setStatus('finished', 'Prueba completada con medicion local contra este servidor.');
+      setStatus('finished', 'Prueba completada.');
     } catch (error) {
       state.running = false;
       state.controller = null;
