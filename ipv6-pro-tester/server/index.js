@@ -45,9 +45,15 @@ const heavyLimiter = rateLimit({
 });
 
 // Aplicamos el limitador a las rutas que consumen CPU, Memoria o Tráfico
+const speedLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 80,
+  message: { error: 'Limite de mediciones de velocidad alcanzado. Intenta de nuevo en un minuto.' }
+});
+
 app.use('/api/large-payload', heavyLimiter);
-app.use('/api/speed-payload', heavyLimiter);
-app.use('/api/speed-upload', heavyLimiter);
+app.use('/api/speed-payload', speedLimiter);
+app.use('/api/speed-upload', speedLimiter);
 app.use('/api/network-tool/stream', heavyLimiter);
 
 function normalizeAddress(address) {

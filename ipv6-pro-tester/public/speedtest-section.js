@@ -5,7 +5,9 @@
     scriptReadyGlobal: 'Speedtest',
     maxVisualMbps: 1000,
     downloadMb: 20,
-    uploadMb: 10,
+    uploadChunkBytes: 768 * 1024,
+    uploadMaxChunks: 12,
+    uploadDurationMs: 10000,
     downloadDurationMs: 12000,
     uploadTimeoutMs: 12000,
   };
@@ -227,18 +229,9 @@
     return finalSpeed;
   }
 
-  function measureUpload(signal) {
-    setPhase('reset');
-    setPhaseProgress(0);
-    updateGauge(0);
-    setStatus('running', 'Preparando medicion de subida...');
-
+  function uploadChunk(payload, signal, onProgress) {
     return new Promise((resolve, reject) => {
-      const uploadBytes = SPEEDTEST_CONFIG.uploadMb * 1024 * 1024;
-      const payload = new Uint8Array(uploadBytes);
       const xhr = new XMLHttpRequest();
-      let displayedSpeed = 0;
-      let startedAt = 0;
 
       state.xhr = xhr;
 
@@ -249,21 +242,8 @@
       xhr.timeout = SPEEDTEST_CONFIG.uploadTimeoutMs;
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 
-      xhr.upload.onloadstart = () => {
-        startedAt = performance.now();
-        setPhase('upload');
-        setPhaseProgress(0);
-        setStatus('running', 'Midiendo subida...');
-      };
-
       xhr.upload.onprogress = (event) => {
-        const elapsed = performance.now() - startedAt;
-        const measured = calculateMbps(event.loaded, elapsed);
-        displayedSpeed = smoothSpeed(displayedSpeed, measured);
-        const byteProgress = event.lengthComputable ? (event.loaded / event.total) * 100 : 0;
-        const timeProgress = (elapsed / SPEEDTEST_CONFIG.uploadTimeoutMs) * 100;
-        setPhaseProgress(Math.max(byteProgress, Math.min(timeProgress, 98)));
-        renderValues({ upload: displayedSpeed });
+        onProgress(event.loaded);
       };
 
       xhr.onload = () => {
@@ -271,32 +251,25 @@
         state.xhr = null;
 
         if (xhr.status < 200 || xhr.status >= 300) {
-          reject(new Error(`Subida: error ${xhr.status}`));
+          reject(new Error(xhr.status === 413
+            ? 'Subida: Nginx esta limitando el tamaño del cuerpo de carga.'
+            : `Subida: error ${xhr.status}`));
           return;
         }
 
-        const finalSpeed = calculateMbps(uploadBytes, performance.now() - startedAt);
-        setPhaseProgress(100);
-        renderValues({ upload: finalSpeed });
-        resolve(finalSpeed);
+        resolve(payload.byteLength);
       };
 
       xhr.onerror = () => {
         signal.removeEventListener('abort', abortUpload);
         state.xhr = null;
-        reject(new Error('No fue posible medir la subida.'));
+        reject(new Error('No fue posible enviar el bloque de subida.'));
       };
 
       xhr.ontimeout = () => {
         signal.removeEventListener('abort', abortUpload);
         state.xhr = null;
-        if (displayedSpeed > 0) {
-          renderValues({ upload: displayedSpeed });
-          setPhaseProgress(100);
-          resolve(displayedSpeed);
-          return;
-        }
-        reject(new Error('La medicion de subida excedio el tiempo esperado.'));
+        reject(new Error('Un bloque de subida excedio el tiempo esperado.'));
       };
 
       xhr.onabort = () => {
@@ -307,6 +280,45 @@
 
       xhr.send(payload);
     });
+  }
+
+  async function measureUpload(signal) {
+    setPhase('reset');
+    setPhaseProgress(0);
+    updateGauge(0);
+    setStatus('running', 'Preparando medicion de subida...');
+
+    const payload = new Uint8Array(SPEEDTEST_CONFIG.uploadChunkBytes);
+    const startedAt = performance.now();
+    let uploadedBytes = 0;
+    let displayedSpeed = 0;
+
+    setPhase('upload');
+    setStatus('running', 'Midiendo subida...');
+
+    for (let chunkIndex = 0; chunkIndex < SPEEDTEST_CONFIG.uploadMaxChunks; chunkIndex += 1) {
+      if (signal.aborted) throw new DOMException('Prueba detenida.', 'AbortError');
+
+      const elapsedBeforeChunk = performance.now() - startedAt;
+      if (elapsedBeforeChunk >= SPEEDTEST_CONFIG.uploadDurationMs) break;
+
+      await uploadChunk(payload, signal, (loadedInChunk) => {
+        const now = performance.now();
+        const elapsed = now - startedAt;
+        const currentBytes = uploadedBytes + loadedInChunk;
+        const measured = calculateMbps(currentBytes, elapsed);
+        displayedSpeed = smoothSpeed(displayedSpeed, measured);
+        setPhaseProgress((elapsed / SPEEDTEST_CONFIG.uploadDurationMs) * 100);
+        renderValues({ upload: displayedSpeed });
+      });
+
+      uploadedBytes += payload.byteLength;
+    }
+
+    const finalSpeed = calculateMbps(uploadedBytes, performance.now() - startedAt);
+    setPhaseProgress(100);
+    renderValues({ upload: finalSpeed || displayedSpeed });
+    return finalSpeed || displayedSpeed;
   }
 
   function startLibreSpeedTest() {
