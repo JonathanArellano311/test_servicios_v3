@@ -199,23 +199,53 @@
       <div class="packet-log" id="packet-log">Aún no se ha ejecutado ninguna prueba de paquetes.</div>
     </section>
 
-    <section class="card">
+    <section class="card speedtest-card" id="speedtest-section">
       <div class="section-head">
         <div>
           <div class="eyebrow">Velocidad</div>
-          <h2>Speed test</h2>
+          <h2>Test de Velocidad</h2>
+        </div>
+        <span class="speed-status-pill" id="speedtest-state">Listo</span>
+      </div>
+      <p class="section-copy">Modulo embebido preparado para LibreSpeed self-hosted. Mientras el backend real no este activo, muestra una simulacion visual controlada.</p>
+
+      <div class="speed-dashboard" data-speedtest-mode="demo">
+        <div class="speed-primary">
+          <span>Descarga</span>
+          <strong><span id="speed-download">0.00</span> Mbps</strong>
+          <div class="speed-meter">
+            <div class="speed-meter-fill" id="speed-download-bar"></div>
+          </div>
+        </div>
+        <div class="speed-primary">
+          <span>Subida</span>
+          <strong><span id="speed-upload">0.00</span> Mbps</strong>
+          <div class="speed-meter">
+            <div class="speed-meter-fill speed-meter-fill-upload" id="speed-upload-bar"></div>
+          </div>
         </div>
       </div>
-      <p class="section-copy">Ejecuta una prueba real con proveedores externos. Se abre fuera de esta web para medir velocidad real de Internet sin simular datos internos.</p>
-      <div class="button-row button-row-stack">
-        <a class="button button-primary" href="https://www.speedtest.net" target="_blank" rel="noreferrer">Abrir Speedtest</a>
-        <a class="button button-secondary" href="https://fast.com" target="_blank" rel="noreferrer">Abrir Fast</a>
+
+      <div class="speed-mini-grid">
+        <div class="speed-metric">
+          <span>Ping</span>
+          <strong><span id="speed-ping">0</span> ms</strong>
+        </div>
+        <div class="speed-metric">
+          <span>Jitter</span>
+          <strong><span id="speed-jitter">0</span> ms</strong>
+        </div>
+        <div class="speed-metric">
+          <span>Modo</span>
+          <strong id="speed-mode-label">Demo</strong>
+        </div>
       </div>
-      <div class="speed-box">
-        <div><span>Estado</span><strong>Listo para abrir</strong></div>
-        <div><span>Proveedores</span><strong>Speedtest / Fast</strong></div>
-        <div><span>Tipo</span><strong>Real (Internet)</strong></div>
+
+      <div class="speed-actions">
+        <button class="button button-primary" id="start-speedtest">Iniciar prueba</button>
+        <button class="button button-secondary" id="stop-speedtest" disabled>Detener</button>
       </div>
+      <div class="speed-status-log" id="speedtest-message">Listo para iniciar.</div>
     </section>
 
     <section class="card span-2">
@@ -294,6 +324,7 @@
     </div>
   </footer>
 
-  <script src="/app.js?v=20260406-ui-hotfix"></script>
+  <script src="/speedtest-section.js?v=20260429-librespeed-ready"></script>
+  <script src="/app.js?v=20260429-librespeed-ready"></script>
 </body>
 </html>
