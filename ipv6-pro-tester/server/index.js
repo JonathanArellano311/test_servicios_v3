@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
@@ -165,6 +166,10 @@ async function resolveAsnForIp(ipAddress) {
   };
 }
 
+function findExecutable(candidates) {
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
 function buildNetworkCommand(tool, target, options = {}) {
   const isWin = os.platform() === 'win32';
 
@@ -187,16 +192,26 @@ function buildNetworkCommand(tool, target, options = {}) {
     return { executable, args };
   }
 
-  // Si no es ping, asumimos tracert
-  const executable = isWin 
+  // Si no es ping, asumimos tracert. En Linux algunos VPS no traen traceroute,
+  // por eso usamos tracepath como alternativa cuando esta disponible.
+  const executable = isWin
     ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tracert.exe')
-    : 'traceroute';
+    : findExecutable(['/usr/bin/traceroute', '/bin/traceroute', '/usr/sbin/traceroute', '/sbin/traceroute'])
+      || findExecutable(['/usr/bin/tracepath', '/bin/tracepath', '/usr/sbin/tracepath', '/sbin/tracepath']);
+
+  if (!executable) {
+    return {
+      error: 'Tracert no esta disponible en este servidor. Instala traceroute o iputils-tracepath en el VPS.',
+    };
+  }
     
   const maxHops = Math.min(Math.max(Number(options.maxHops) || 12, 1), 30);
   
   let args = [];
   if (isWin) {
     args = ['-d', '-h', String(maxHops), target];
+  } else if (path.basename(executable) === 'tracepath') {
+    args = ['-n', '-m', String(maxHops), target];
   } else {
     // -4 fuerza IPv4 en traceroute por la misma razón que en ping.
     args = ['-4', '-n', '-m', String(maxHops), target];
@@ -308,7 +323,14 @@ app.get('/api/network-tool/stream', (req, res) => {
     return;
   }
 
-  const { executable, args } = buildNetworkCommand(tool, target, { infinite, count, maxHops });
+  const { executable, args, error } = buildNetworkCommand(tool, target, { infinite, count, maxHops });
+  if (error) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(`[ERROR] ${error}\n`);
+    return;
+  }
+
   console.log(`[API] GET /api/network-tool/stream -> ${tool} ${target} ${args.join(' ')}`);
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');

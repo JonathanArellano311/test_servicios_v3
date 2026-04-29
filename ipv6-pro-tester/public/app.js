@@ -584,6 +584,7 @@ async function runManualNetworkTool(tool) {
 
   output.textContent = [
     `Ejecutando ${tool.toUpperCase()} hacia ${target}...`,
+    'Origen: servidor de prueba',
     tool === 'ping'
       ? `Cantidad: ${pingInfinite ? 'infinito' : pingCount}`
       : `Saltos máximos: ${maxHops}`,
@@ -627,7 +628,7 @@ async function runManualNetworkTool(tool) {
     if (error.name === 'AbortError') {
       output.textContent += '\n\n[Proceso detenido por el usuario]\n';
     } else if (error.message === '429_RATE_LIMIT' || error.message.includes('429')) {
-      output.textContent += '\n\n🛡️ [Seguridad]: Has excedido tu límite de consultas gratuitas a nuestras herramientas. Por favor relaja el servidor e intenta dentro de 1 minuto.\n';
+      output.textContent += '\n\nLimite de consultas alcanzado. Intenta de nuevo en 1 minuto.\n';
     } else {
       output.textContent += `\n\nNo fue posible ejecutar ${tool}: ${error.message}\n`;
     }
