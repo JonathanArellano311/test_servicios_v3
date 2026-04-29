@@ -11,6 +11,7 @@
     timer: null,
     running: false,
     phase: 'ready',
+    activeMetric: 'download',
     values: { ping: 0, jitter: 0, download: 0, upload: 0 },
   };
 
@@ -51,6 +52,9 @@
 
   function setPhase(phase) {
     state.phase = phase;
+    if (phase === 'download' || phase === 'ready') state.activeMetric = 'download';
+    if (phase === 'upload') state.activeMetric = 'upload';
+
     const phaseLabel = $('speed-phase-label');
     const uploadChannel = $('speed-upload-channel');
     const downloadChannel = $('speed-download-channel');
@@ -92,7 +96,7 @@
     $('speed-download').textContent = formatNumber(state.values.download);
     $('speed-upload').textContent = formatNumber(state.values.upload);
 
-    const activeValue = (state.phase === 'download' || state.phase === 'finished')
+    const activeValue = state.activeMetric === 'download'
       ? state.values.download
       : state.values.upload;
     updateGauge(activeValue);
@@ -145,7 +149,7 @@
 
   function startFallbackTest() {
     let tick = 0;
-    const totalTicks = 70;
+    const totalTicks = 190;
     const downloadTarget = 180 + Math.random() * 160;
     const uploadTarget = 35 + Math.random() * 85;
     const pingTarget = 8 + Math.random() * 24;
@@ -154,17 +158,17 @@
     state.timer = window.setInterval(() => {
       tick += 1;
 
-      if (tick < 10) {
+      if (tick < 20) {
         setPhase('ping');
-        const progress = tick / 10;
+        const progress = tick / 20;
         renderValues({
           ping: pingTarget * progress * 3.5,
           jitter: jitterTarget * progress * 3.5,
         });
         setStatus('running', 'Midiendo ping y jitter...');
-      } else if (tick < 40) {
+      } else if (tick < 125) {
         setPhase('download');
-        const progress = (tick - 10) / 30;
+        const progress = (tick - 20) / 105;
         const eased = Math.sin(progress * Math.PI * 0.5);
         renderValues({
           ping: pingTarget,
@@ -172,13 +176,13 @@
           download: downloadTarget * clamp(eased, 0, 1),
         });
         setStatus('running', 'Midiendo descarga...');
-      } else if (tick < 47) {
+      } else if (tick < 130) {
         setPhase('reset');
         updateGauge(0);
         setStatus('running', 'Preparando medicion de subida...');
       } else {
         setPhase('upload');
-        const progress = (tick - 47) / 23;
+        const progress = (tick - 130) / 60;
         const eased = Math.sin(progress * Math.PI * 0.5);
         renderValues({
           ping: pingTarget,
@@ -202,7 +206,7 @@
         });
         setStatus('finished', 'Prueba completada. Lista para conectarse al backend LibreSpeed real.');
       }
-    }, 120);
+    }, 200);
   }
 
   function stopCurrentTimer() {
