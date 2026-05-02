@@ -50,7 +50,7 @@ const heavyLimiter = rateLimit({
 // Aplicamos el limitador a las rutas que consumen CPU, Memoria o Tráfico
 const speedLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 240,
+  max: 2000,
   message: { error: 'Limite de mediciones de velocidad alcanzado. Intenta de nuevo en un minuto.' }
 });
 

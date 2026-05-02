@@ -6,8 +6,8 @@
     maxVisualMbps: 10000,
     downloadMb: 64,
     downloadParallel: 6,
-    uploadParallel: 4,
-    uploadChunkBytes: 768 * 1024,
+    uploadParallel: 3,
+    uploadChunkBytes: 960 * 1024,
     uploadDurationMs: 15000,
     downloadDurationMs: 15000,
     uploadTimeoutMs: 20000,
@@ -321,29 +321,38 @@
     let uploadedBytes = 0;
     let displayedSpeed = 0;
     const activeUploads = new Map();
+    let stopUploads = false;
 
     setPhase('upload');
     setStatus('running', 'Midiendo subida...');
 
     async function uploadWorker(workerIndex) {
-      while (!signal.aborted && performance.now() < deadline) {
-        await uploadChunk(payload, signal, (loadedInChunk) => {
-          const now = performance.now();
-          const elapsed = now - startedAt;
-          activeUploads.set(workerIndex, loadedInChunk);
-          const activeBytes = [...activeUploads.values()].reduce((sum, value) => sum + value, 0);
-          const currentBytes = uploadedBytes + activeBytes;
-          displayedSpeed = smoothSpeed(displayedSpeed, calculateMbps(currentBytes, elapsed));
-          setPhaseProgress((elapsed / SPEEDTEST_CONFIG.uploadDurationMs) * 100);
-          renderValues({ upload: displayedSpeed });
-        });
+      while (!signal.aborted && !stopUploads && performance.now() < deadline) {
+        try {
+          await uploadChunk(payload, signal, (loadedInChunk) => {
+            const now = performance.now();
+            const elapsed = now - startedAt;
+            activeUploads.set(workerIndex, loadedInChunk);
+            const activeBytes = [...activeUploads.values()].reduce((sum, value) => sum + value, 0);
+            const currentBytes = uploadedBytes + activeBytes;
+            displayedSpeed = smoothSpeed(displayedSpeed, calculateMbps(currentBytes, elapsed));
+            setPhaseProgress((elapsed / SPEEDTEST_CONFIG.uploadDurationMs) * 100);
+            renderValues({ upload: displayedSpeed });
+          });
 
-        uploadedBytes += payload.byteLength;
-        activeUploads.set(workerIndex, 0);
+          uploadedBytes += payload.byteLength;
+          activeUploads.set(workerIndex, 0);
+        } catch (error) {
+          activeUploads.set(workerIndex, 0);
+          if (signal.aborted || uploadedBytes === 0) throw error;
+          stopUploads = true;
+        }
       }
     }
 
-    await Promise.all(Array.from({ length: SPEEDTEST_CONFIG.uploadParallel }, (_, index) => uploadWorker(index)));
+    const results = await Promise.allSettled(Array.from({ length: SPEEDTEST_CONFIG.uploadParallel }, (_, index) => uploadWorker(index)));
+    const fatalError = results.find((result) => result.status === 'rejected')?.reason;
+    if (fatalError && uploadedBytes === 0) throw fatalError;
 
     const finalSpeed = calculateMbps(uploadedBytes, performance.now() - startedAt);
     setPhaseProgress(100);
