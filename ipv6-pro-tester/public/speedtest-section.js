@@ -16,6 +16,7 @@
   const state = {
     controller: null,
     xhr: null,
+    activeXhrs: new Set(),
     timer: null,
     running: false,
     phase: 'ready',
@@ -97,7 +98,7 @@
 
   function updateGauge(value) {
     const bounded = clamp(Number(value || 0), 0, SPEEDTEST_CONFIG.maxVisualMbps);
-    const progress = bounded / SPEEDTEST_CONFIG.maxVisualMbps;
+    const progress = gaugeProgressForMbps(bounded);
     const degrees = progress * 260;
     const needleAngle = -130 + degrees;
     const gauge = $('speed-gauge-progress');
@@ -141,6 +142,31 @@
   function calculateMbps(bytes, elapsedMs) {
     if (!bytes || !elapsedMs || elapsedMs <= 0) return 0;
     return (bytes * 8) / (elapsedMs / 1000) / 1000000;
+  }
+
+  function gaugeProgressForMbps(value) {
+    const points = [
+      [0, 0],
+      [100, 0.12],
+      [500, 0.24],
+      [1000, 0.38],
+      [2500, 0.56],
+      [5000, 0.74],
+      [7500, 0.88],
+      [10000, 1],
+    ];
+    const speed = clamp(Number(value || 0), 0, SPEEDTEST_CONFIG.maxVisualMbps);
+
+    for (let index = 1; index < points.length; index += 1) {
+      const [currentSpeed, currentProgress] = points[index];
+      const [previousSpeed, previousProgress] = points[index - 1];
+      if (speed <= currentSpeed) {
+        const ratio = (speed - previousSpeed) / (currentSpeed - previousSpeed);
+        return previousProgress + ((currentProgress - previousProgress) * ratio);
+      }
+    }
+
+    return 1;
   }
 
   function smoothSpeed(previous, next) {
@@ -233,6 +259,7 @@
 
       const abortUpload = () => xhr.abort();
       signal.addEventListener('abort', abortUpload, { once: true });
+      state.activeXhrs.add(xhr);
 
       xhr.open('POST', `/api/speed-upload?ts=${Date.now()}`, true);
       xhr.timeout = SPEEDTEST_CONFIG.uploadTimeoutMs;
@@ -244,6 +271,7 @@
 
       xhr.onload = () => {
         signal.removeEventListener('abort', abortUpload);
+        state.activeXhrs.delete(xhr);
         state.xhr = null;
 
         if (xhr.status < 200 || xhr.status >= 300) {
@@ -258,18 +286,21 @@
 
       xhr.onerror = () => {
         signal.removeEventListener('abort', abortUpload);
+        state.activeXhrs.delete(xhr);
         state.xhr = null;
         reject(new Error('No fue posible enviar el bloque de subida.'));
       };
 
       xhr.ontimeout = () => {
         signal.removeEventListener('abort', abortUpload);
+        state.activeXhrs.delete(xhr);
         state.xhr = null;
         reject(new Error('Un bloque de subida excedio el tiempo esperado.'));
       };
 
       xhr.onabort = () => {
         signal.removeEventListener('abort', abortUpload);
+        state.activeXhrs.delete(xhr);
         state.xhr = null;
         reject(new DOMException('Prueba detenida.', 'AbortError'));
       };
@@ -289,26 +320,30 @@
     const deadline = startedAt + SPEEDTEST_CONFIG.uploadDurationMs;
     let uploadedBytes = 0;
     let displayedSpeed = 0;
+    const activeUploads = new Map();
 
     setPhase('upload');
     setStatus('running', 'Midiendo subida...');
 
-    async function uploadWorker() {
+    async function uploadWorker(workerIndex) {
       while (!signal.aborted && performance.now() < deadline) {
         await uploadChunk(payload, signal, (loadedInChunk) => {
           const now = performance.now();
           const elapsed = now - startedAt;
-          const currentBytes = uploadedBytes + loadedInChunk;
+          activeUploads.set(workerIndex, loadedInChunk);
+          const activeBytes = [...activeUploads.values()].reduce((sum, value) => sum + value, 0);
+          const currentBytes = uploadedBytes + activeBytes;
           displayedSpeed = smoothSpeed(displayedSpeed, calculateMbps(currentBytes, elapsed));
           setPhaseProgress((elapsed / SPEEDTEST_CONFIG.uploadDurationMs) * 100);
           renderValues({ upload: displayedSpeed });
         });
 
         uploadedBytes += payload.byteLength;
+        activeUploads.set(workerIndex, 0);
       }
     }
 
-    await Promise.all(Array.from({ length: SPEEDTEST_CONFIG.uploadParallel }, () => uploadWorker()));
+    await Promise.all(Array.from({ length: SPEEDTEST_CONFIG.uploadParallel }, (_, index) => uploadWorker(index)));
 
     const finalSpeed = calculateMbps(uploadedBytes, performance.now() - startedAt);
     setPhaseProgress(100);
@@ -385,6 +420,8 @@
       state.xhr.abort();
       state.xhr = null;
     }
+    state.activeXhrs.forEach((xhr) => xhr.abort());
+    state.activeXhrs.clear();
   }
 
   function startSpeedTest() {

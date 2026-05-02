@@ -10,6 +10,10 @@ const state = {
     portalIPv4: null,
     portalIPv6: null,
   },
+  clientAsn: {
+    ipv4: null,
+    ipv6: null,
+  },
   scores: { ipv4: 0, ipv6: 0, readiness: 0 },
   packetRun: { active: false, stopRequested: false, controller: null },
   manualNetwork: { controller: null, running: false },
@@ -76,6 +80,27 @@ async function detectPublicInternetIps() {
       }
     } catch (_error) {
       // If one family is unavailable from the browser path, keep the previous value.
+    }
+  }));
+}
+
+function formatAsnInfo(asn) {
+  if (!asn?.asn) return 'No disponible';
+  return [asn.asn, asn.owner, asn.prefix].filter(Boolean).join(' - ');
+}
+
+async function enrichClientAsnDetails() {
+  const targets = [
+    { key: 'ipv4', ip: state.clientNetwork.publicIPv4 },
+    { key: 'ipv6', ip: state.clientNetwork.publicIPv6 },
+  ].filter((item) => item.ip);
+
+  await Promise.all(targets.map(async ({ key, ip }) => {
+    try {
+      const result = await fetchJson(`/api/domain-check?domain=${encodeURIComponent(ip)}`);
+      state.clientAsn[key] = result.asn || null;
+    } catch (_error) {
+      state.clientAsn[key] = null;
     }
   }));
 }
@@ -247,6 +272,7 @@ async function loadBaseData() {
   detectInternalEnvironment();
   await detectPublicInternetIps();
   await detectLocalIps();
+  await enrichClientAsnDetails();
 }
 
 function updateScores() {
@@ -303,7 +329,10 @@ function updateTestResults() {
   const family = state.ipInfo?.family || 'Desconocido';
   const ip = state.ipInfo?.ip || 'No detectada';
   const localIPv4 = state.clientNetwork.localIPv4 || 'No detectada';
+  const publicIPv4 = state.clientNetwork.publicIPv4 || 'No detectada';
   const publicIPv6 = state.clientNetwork.publicIPv6 || 'No detectada';
+  const asnIPv4 = formatAsnInfo(state.clientAsn.ipv4);
+  const asnIPv6 = formatAsnInfo(state.clientAsn.ipv6);
   const serverAddresses = state.health?.serverAddresses || [];
   const hasIPv6 = serverAddresses.some((item) => String(item.address).includes(':'));
   const hasIPv4 = serverAddresses.some((item) => String(item.address).includes('.'));
@@ -313,7 +342,7 @@ function updateTestResults() {
   state.tests[0] = {
     ...state.tests[0],
     status: state.clientNetwork.publicIPv6 || state.clientNetwork.publicIPv4 ? 'ok' : 'warn',
-    details: `Ruta al portal: ${portalFamilyLabel} (${ip}). IPv6 pública del cliente: ${publicIPv6}. IPv4 local detectada: ${localIPv4}.`
+    details: `Cliente IPv4 pública: ${publicIPv4} (${asnIPv4}). Cliente IPv6 pública: ${publicIPv6} (${asnIPv6}). Ruta al portal: ${portalFamilyLabel} (${ip}).`
   };
 
   state.tests[1] = {
@@ -350,7 +379,9 @@ function updateTestResults() {
 function updateOverview(latency = 0, largePayload = null) {
   renderStats([
     { label: 'IPv4 pública del cliente', value: state.clientNetwork.publicIPv4 || 'No detectada en esta sesión' },
+    { label: 'ASN IPv4 del cliente', value: formatAsnInfo(state.clientAsn.ipv4) },
     { label: 'IPv6 pública del cliente', value: state.clientNetwork.publicIPv6 || 'No detectada en esta sesión', className: 'stat-box-wide stat-box-ipv6' },
+    { label: 'ASN IPv6 del cliente', value: formatAsnInfo(state.clientAsn.ipv6), className: 'stat-box-wide' },
     { label: 'Ruta actual al portal', value: state.ipInfo?.family || 'Desconocido' },
     { label: 'IPv4 local del cliente', value: state.clientNetwork.localIPv4 || 'No disponible en este navegador' },
     { label: 'IPv6 local del cliente', value: state.clientNetwork.localIPv6 || 'No disponible en este navegador' },
@@ -727,6 +758,7 @@ function exportReport() {
     timestamp: new Date().toISOString(),
     ipInfo: state.ipInfo,
     clientNetwork: state.clientNetwork,
+    clientAsn: state.clientAsn,
     scores: state.scores,
     tests: state.tests,
   };
@@ -737,7 +769,9 @@ function exportReport() {
     [''],
     ['=== RESULTADOS ===', ''],
     ['IPv4 Pública Cliente', reportData.clientNetwork?.publicIPv4 || '-'],
+    ['ASN IPv4 Cliente', formatAsnInfo(reportData.clientAsn?.ipv4)],
     ['IPv6 Pública Cliente', reportData.clientNetwork?.publicIPv6 || '-'],
+    ['ASN IPv6 Cliente', formatAsnInfo(reportData.clientAsn?.ipv6)],
     ['Ruta Actual al Portal', reportData.ipInfo?.family || '-'],
     ['IPv4 Local Cliente', reportData.clientNetwork?.localIPv4 || '-'],
     ['IPv6 Local Cliente', reportData.clientNetwork?.localIPv6 || '-'],
