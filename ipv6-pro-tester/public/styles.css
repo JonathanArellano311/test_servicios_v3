@@ -634,16 +634,54 @@ input {
 }
 
 @media (max-width: 780px) {
-  .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container, .packet-counter-grid, .speed-mini-grid, .speed-actions, .speed-topline { grid-template-columns: 1fr; }
+  .main-grid, .score-group, .stats-grid, .packet-live-grid, .packet-progress-container, .packet-counter-grid, .speed-mini-grid, .speed-actions { grid-template-columns: 1fr; }
   .hero-card, .span-2, .span-full, .stat-box-wide { grid-column: span 1; }
   .domain-field input { min-width: 100%; }
-  .speed-gauge-layout { min-height: 310px; }
+  .speedtest-card { padding: 16px; }
+  .speed-topline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .speed-channel {
+    min-height: 88px;
+    padding: 13px 10px;
+  }
+  .speed-channel strong {
+    font-size: 1.95rem;
+  }
+  .speed-gauge-layout {
+    min-height: 260px;
+    margin-top: 0;
+  }
+  .speed-gauge {
+    width: min(360px, 100%);
+  }
+  .speed-gauge-center {
+    bottom: 24px;
+  }
+  .speed-gauge-center strong {
+    font-size: 2.75rem;
+  }
+  .speed-gauge-mask {
+    inset: 30px;
+  }
   .speed-gauge-scale span {
+    font-size: 0.9rem;
     transform:
       translate(-50%, -50%)
       rotate(var(--angle))
-      translateY(-102px)
+      translateY(-108px)
       rotate(calc(-1 * var(--angle)));
   }
-  .speed-needle { height: 112px; }
+  .speed-needle {
+    height: 112px;
+    width: 10px;
+  }
+  .speed-mini-grid.speed-mini-grid-prominent {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .speed-metric {
+    padding: 12px 10px;
+  }
 }
