@@ -7,7 +7,7 @@
     downloadMb: 64,
     downloadParallel: 6,
     uploadParallel: 4,
-    uploadChunkBytes: 8 * 1024 * 1024,
+    uploadChunkBytes: 768 * 1024,
     uploadDurationMs: 15000,
     downloadDurationMs: 15000,
     uploadTimeoutMs: 20000,
