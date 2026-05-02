@@ -54,16 +54,31 @@ function isPrivateIpv6(value) {
     || normalized.startsWith('fe80:');
 }
 
+function isLocalHostname(value) {
+  const normalized = String(value || '').toLowerCase();
+  return ['localhost', '127.0.0.1', '::1'].includes(normalized);
+}
+
+function isPrivateIp(value) {
+  return isPrivateIpv4(value) || isPrivateIpv6(value) || isLocalHostname(value);
+}
+
+function isPublicPageHost() {
+  const host = window.location.hostname || '';
+  return Boolean(host) && !isPrivateIp(host);
+}
+
 function classifyClientNetwork() {
   const observedIp = state.ipInfo?.ip || '';
-  state.clientNetwork.portalIPv4 = observedIp && !observedIp.includes(':') ? observedIp : null;
-  state.clientNetwork.portalIPv6 = observedIp && observedIp.includes(':') ? observedIp : null;
+  const observedIsPublic = observedIp && !isPrivateIp(observedIp);
+  state.clientNetwork.portalIPv4 = observedIsPublic && !observedIp.includes(':') ? observedIp : null;
+  state.clientNetwork.portalIPv6 = observedIsPublic && observedIp.includes(':') ? observedIp : null;
   state.clientNetwork.publicIPv4 = state.clientNetwork.portalIPv4;
   state.clientNetwork.publicIPv6 = state.clientNetwork.portalIPv6;
 }
 
 async function detectPublicInternetIps() {
-  if (state.environment.isInternal) return;
+  if (state.environment.isInternal && !isPublicPageHost()) return;
 
   const probes = [
     { family: 'publicIPv4', url: 'https://api4.ipify.org?format=json' },
@@ -159,11 +174,10 @@ async function detectLocalIps() {
 function detectInternalEnvironment() {
   const host = window.location.hostname || '';
   const observedIp = state.ipInfo?.ip || '';
-  const localHostnames = ['localhost', '127.0.0.1', '::1'];
-  const internalHost = localHostnames.includes(host) || isPrivateIpv4(host);
-  const internalIp = localHostnames.includes(observedIp) || isPrivateIpv4(observedIp);
+  const internalHost = isPrivateIp(host);
+  const internalIp = isPrivateIp(observedIp);
 
-  state.environment = internalHost || internalIp
+  state.environment = internalHost || (!isPublicPageHost() && internalIp)
     ? { isInternal: true, reason: 'Pruebas internas/locales detectadas' }
     : { isInternal: false, reason: 'Entorno con acceso externo o publicado' };
 }
