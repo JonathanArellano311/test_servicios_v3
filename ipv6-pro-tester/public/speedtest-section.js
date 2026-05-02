@@ -3,13 +3,14 @@
     // Cambia a "librespeed" cuando el servicio dedicado de velocidad este disponible.
     mode: 'local',
     scriptReadyGlobal: 'Speedtest',
-    maxVisualMbps: 1000,
-    downloadMb: 20,
-    uploadChunkBytes: 768 * 1024,
-    uploadMaxChunks: 12,
-    uploadDurationMs: 10000,
-    downloadDurationMs: 12000,
-    uploadTimeoutMs: 12000,
+    maxVisualMbps: 10000,
+    downloadMb: 64,
+    downloadParallel: 6,
+    uploadParallel: 4,
+    uploadChunkBytes: 8 * 1024 * 1024,
+    uploadDurationMs: 15000,
+    downloadDurationMs: 15000,
+    uploadTimeoutMs: 20000,
   };
 
   const state = {
@@ -173,55 +174,50 @@
     setPhase('download');
     setStatus('running', 'Midiendo descarga...');
 
-    const response = await fetch(`/api/speed-payload?mb=${SPEEDTEST_CONFIG.downloadMb}&ts=${Date.now()}`, {
-      cache: 'no-store',
-      signal,
-    });
-
-    if (!response.ok) throw new Error(`Descarga: error ${response.status}`);
-
     const startedAt = performance.now();
+    const deadline = startedAt + SPEEDTEST_CONFIG.downloadDurationMs;
     let loadedBytes = 0;
-    let lastBytes = 0;
-    let lastAt = startedAt;
     let displayedSpeed = 0;
+    let lastRenderAt = startedAt;
 
-    if (!response.body) {
-      const data = await response.arrayBuffer();
-      displayedSpeed = calculateMbps(data.byteLength, performance.now() - startedAt);
-      renderValues({ download: displayedSpeed });
-      return displayedSpeed;
+    async function downloadWorker(workerIndex) {
+      while (!signal.aborted && performance.now() < deadline) {
+        const response = await fetch(`/api/speed-payload?mb=${SPEEDTEST_CONFIG.downloadMb}&worker=${workerIndex}&ts=${Date.now()}`, {
+          cache: 'no-store',
+          signal,
+        });
+        if (!response.ok) throw new Error(`Descarga: error ${response.status}`);
+
+        if (!response.body) {
+          const data = await response.arrayBuffer();
+          loadedBytes += data.byteLength;
+          continue;
+        }
+
+        const reader = response.body.getReader();
+        while (!signal.aborted && performance.now() < deadline) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          loadedBytes += value.byteLength;
+          updateDownloadProgress();
+        }
+        reader.cancel().catch(() => {});
+      }
     }
 
-    const reader = response.body.getReader();
-    let reachedTimeLimit = false;
-    const downloadTimeout = window.setTimeout(() => {
-      reachedTimeLimit = true;
-      reader.cancel().catch(() => {});
-    }, SPEEDTEST_CONFIG.downloadDurationMs);
-
-    try {
-      while (!reachedTimeLimit) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        loadedBytes += value.byteLength;
+    function updateDownloadProgress() {
         const now = performance.now();
-        const elapsedSinceLast = now - lastAt;
         const elapsedTotal = now - startedAt;
         setPhaseProgress((elapsedTotal / SPEEDTEST_CONFIG.downloadDurationMs) * 100);
 
-        if (elapsedSinceLast >= 140) {
-          const instantSpeed = calculateMbps(loadedBytes - lastBytes, elapsedSinceLast);
-          displayedSpeed = smoothSpeed(displayedSpeed, instantSpeed);
+        if (now - lastRenderAt >= 140) {
+          displayedSpeed = smoothSpeed(displayedSpeed, calculateMbps(loadedBytes, elapsedTotal));
           renderValues({ download: displayedSpeed });
-          lastBytes = loadedBytes;
-          lastAt = now;
+          lastRenderAt = now;
         }
-      }
-    } finally {
-      window.clearTimeout(downloadTimeout);
     }
+
+    await Promise.all(Array.from({ length: SPEEDTEST_CONFIG.downloadParallel }, (_, index) => downloadWorker(index)));
 
     const finalSpeed = calculateMbps(loadedBytes, performance.now() - startedAt);
     setPhaseProgress(100);
@@ -290,30 +286,29 @@
 
     const payload = new Uint8Array(SPEEDTEST_CONFIG.uploadChunkBytes);
     const startedAt = performance.now();
+    const deadline = startedAt + SPEEDTEST_CONFIG.uploadDurationMs;
     let uploadedBytes = 0;
     let displayedSpeed = 0;
 
     setPhase('upload');
     setStatus('running', 'Midiendo subida...');
 
-    for (let chunkIndex = 0; chunkIndex < SPEEDTEST_CONFIG.uploadMaxChunks; chunkIndex += 1) {
-      if (signal.aborted) throw new DOMException('Prueba detenida.', 'AbortError');
+    async function uploadWorker() {
+      while (!signal.aborted && performance.now() < deadline) {
+        await uploadChunk(payload, signal, (loadedInChunk) => {
+          const now = performance.now();
+          const elapsed = now - startedAt;
+          const currentBytes = uploadedBytes + loadedInChunk;
+          displayedSpeed = smoothSpeed(displayedSpeed, calculateMbps(currentBytes, elapsed));
+          setPhaseProgress((elapsed / SPEEDTEST_CONFIG.uploadDurationMs) * 100);
+          renderValues({ upload: displayedSpeed });
+        });
 
-      const elapsedBeforeChunk = performance.now() - startedAt;
-      if (elapsedBeforeChunk >= SPEEDTEST_CONFIG.uploadDurationMs) break;
-
-      await uploadChunk(payload, signal, (loadedInChunk) => {
-        const now = performance.now();
-        const elapsed = now - startedAt;
-        const currentBytes = uploadedBytes + loadedInChunk;
-        const measured = calculateMbps(currentBytes, elapsed);
-        displayedSpeed = smoothSpeed(displayedSpeed, measured);
-        setPhaseProgress((elapsed / SPEEDTEST_CONFIG.uploadDurationMs) * 100);
-        renderValues({ upload: displayedSpeed });
-      });
-
-      uploadedBytes += payload.byteLength;
+        uploadedBytes += payload.byteLength;
+      }
     }
+
+    await Promise.all(Array.from({ length: SPEEDTEST_CONFIG.uploadParallel }, () => uploadWorker()));
 
     const finalSpeed = calculateMbps(uploadedBytes, performance.now() - startedAt);
     setPhaseProgress(100);

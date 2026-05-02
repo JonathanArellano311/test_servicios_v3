@@ -51,11 +51,69 @@ Luego configura el webhook en GitHub → Settings → Webhooks → Payload URL
 - Abre puerto 3000 (o el que uses)
 - Para HTTPS, usa nginx como reverse proxy con Let's Encrypt
 
+## Nginx recomendado para dominio/IP pública
+
+Si el dominio funciona pero `http://200.59.191.176` devuelve `404`, revisa que Nginx tenga un bloque `server` para el dominio y, si quieres responder por IP directa, otro bloque `default_server`.
+
+Ejemplo para el dominio:
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name tu-dominio.com www.tu-dominio.com;
+
+    client_max_body_size 100m;
+    proxy_request_buffering off;
+    proxy_buffering off;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Para que la IP pública directa también abra la app:
+
+```nginx
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    client_max_body_size 100m;
+    proxy_request_buffering off;
+    proxy_buffering off;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Después de editar:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ## Variables de entorno (si las necesitas después)
 Crea `.env`:
 ```
 PORT=3000
 HOST=0.0.0.0
+MAX_SPEED_PAYLOAD_MB=64
 ```
 
 ## Monitoreo

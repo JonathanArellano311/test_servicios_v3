@@ -34,8 +34,10 @@ app.set('trust proxy', 1); // Confiar en 1 nivel de proxy (Nginx)
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-// Buffer pre-procesado: Esto evita alocar 5MB de RAM en cada petición concurrente a la prueba de velocidad
-const STATIC_SPEED_BUFFER = Buffer.alloc(25 * 1024 * 1024, 'a');
+// Buffer pre-procesado: evita alocar RAM por cada petición concurrente del test de velocidad.
+const MAX_SPEED_PAYLOAD_MB = Number(process.env.MAX_SPEED_PAYLOAD_MB || 64);
+const MAX_SPEED_PAYLOAD_BYTES = MAX_SPEED_PAYLOAD_MB * 1024 * 1024;
+const STATIC_SPEED_BUFFER = Buffer.alloc(MAX_SPEED_PAYLOAD_BYTES, 'a');
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -48,7 +50,7 @@ const heavyLimiter = rateLimit({
 // Aplicamos el limitador a las rutas que consumen CPU, Memoria o Tráfico
 const speedLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 80,
+  max: 240,
   message: { error: 'Limite de mediciones de velocidad alcanzado. Intenta de nuevo en un minuto.' }
 });
 
@@ -273,7 +275,7 @@ app.get('/api/large-payload', (req, res) => {
 });
 
 app.get('/api/speed-payload', (req, res) => {
-  const requestedMb = Math.min(Math.max(Number(req.query.mb || 20), 1), 25);
+  const requestedMb = Math.min(Math.max(Number(req.query.mb || 20), 1), MAX_SPEED_PAYLOAD_MB);
   const sizeBytes = requestedMb * 1024 * 1024;
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
@@ -283,14 +285,14 @@ app.get('/api/speed-payload', (req, res) => {
 
 app.post('/api/speed-upload', (req, res) => {
   let bytes = 0;
-  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+  const MAX_UPLOAD_BYTES = MAX_SPEED_PAYLOAD_BYTES;
   let rejected = false;
 
   req.on('data', (chunk) => {
     bytes += chunk.length;
     if (bytes > MAX_UPLOAD_BYTES && !rejected) {
       rejected = true;
-      res.status(413).json({ error: 'Payload demasiado grande (maximo 25 MB).' });
+      res.status(413).json({ error: `Payload demasiado grande (maximo ${MAX_SPEED_PAYLOAD_MB} MB).` });
       req.destroy();
     }
   });
